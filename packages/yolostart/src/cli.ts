@@ -1,37 +1,17 @@
 #!/usr/bin/env node
-import { parseArgs } from "node:util";
-import { deviceAuth } from "./auth.js";
-import { scan } from "./scan.js";
-
-async function main(): Promise<void> {
-  const { values } = parseArgs({
-    options: {
-      scan: { type: "string" },
-      project: { type: "string" },
-      "dry-run": { type: "boolean" },
-      help: { type: "boolean", short: "h" },
-    },
-  });
-  if (values.help) {
-    console.log(
-      "Usage: yolostart --dry-run [--scan <directory>] [--project <name-or-relative-path>]\nSigns in and prints candidate metadata. Nothing uploads.\nAll import decisions belong to browser approval (not yet available).",
-    );
-    return;
-  }
-  if (!values["dry-run"])
-    throw new Error(
-      "Import is not yet available. Use --dry-run to preview a manifest; nothing will upload.",
-    );
-  await deviceAuth();
-  const manifest = await scan(values.scan ?? process.cwd(), values.project);
-  console.error(
-    "Dry run only. Nothing uploaded. Excluded secrets must be supplied separately in the workspace.",
+import { readFile } from "node:fs/promises";
+import { launch } from "./launcher.js";
+try {
+  const { version } = JSON.parse(
+    await readFile(new URL("../package.json", import.meta.url), "utf8"),
+  ) as { version: string };
+  process.exitCode = await launch(
+    process.argv.slice(2),
+    new URL(`./native/${version}/`, import.meta.url),
   );
-  console.log(JSON.stringify(manifest, null, 2));
-}
-main().catch((error) => {
+} catch (error) {
   console.error(
-    `yolostart: ${error instanceof Error ? error.message : "Failed."}`,
+    `yolostart: ${error instanceof Error ? error.message : "Could not launch the native executable."}`,
   );
   process.exitCode = 1;
-});
+}

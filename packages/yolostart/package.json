@@ -1,7 +1,7 @@
 {
   "name": "yolostart",
-  "version": "0.1.0",
-  "description": "Preview a local project import into YOLO Studio",
+  "version": "0.2.0",
+  "description": "Native YOLO Studio project preview CLI, also available through npx",
   "license": "MIT",
   "type": "module",
   "bin": {
@@ -9,7 +9,8 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "THIRD_PARTY_NOTICES.txt"
   ],
   "publishConfig": {
     "access": "public"
@@ -18,14 +19,13 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "node scripts/build.mjs",
     "typecheck:test": "tsc -p tsconfig.test.json --noEmit",
-    "test": "npm run build && tsx --test test/*.test.ts",
-    "prepublishOnly": "npm run build && npm run typecheck:test && npm test"
+    "test": "npm run build && tsx --test test/*.test.ts && node scripts/go.mjs test ./...",
+    "prepublishOnly": "npm run build && npm run typecheck:test && npm test",
+    "test:native": "node scripts/go.mjs test ./..."
   },
-  "dependencies": {
-    "ignore": "^7.0.5"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@types/node": "^20.0.0",
     "tsx": "^4.20.0",
