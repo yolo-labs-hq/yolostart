@@ -32,7 +32,7 @@ test("browser and curl receive exact POSIX source; release assets use the native
     assert.equal(await response.text(), script);
   }
   assert.match(script, /^[\x00-\x7f]*$/);
-  const response = worker.fetch(
+  const response = await worker.fetch(
     new Request("https://example.test/releases/latest.txt"),
     { ASSETS: { fetch: () => new Response("0.2.0\n") } },
   );
@@ -104,4 +104,12 @@ test("piped shell uses no Node/npm, preserves pins/arguments/exit status and fai
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+test('npx package alias maps to the versioned tarball without stale caching', async () => {
+  let target;
+  const response = await worker.fetch(new Request('https://example.test/yolostart.tgz'), {ASSETS:{fetch(request){target=new URL(request.url).pathname;return new Response('package');}}});
+  assert.equal(target,'/releases/0.2.0/yolostart-0.2.0.tgz');
+  assert.equal(response.headers.get('cache-control'),'no-store');
+  assert.equal(await response.text(),'package');
 });

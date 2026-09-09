@@ -6,15 +6,17 @@ One native CLI, two entry points:
   downloads a checksummed executable into a temporary directory and runs it.
   No Node, npm, Go, or system installation is needed. macOS and Linux on
   x64/arm64 are supported; Linux builds use `CGO_ENABLED=0`.
-- **npm:** `npx yolostart --dry-run` runs the **same executable**, bundled in the
+- **npm:** `npx https://yolostart-sh.yolo.host/yolostart.tgz --dry-run`
+  runs the **same executable**, bundled in the
   npm package. The small Node wrapper verifies and unpacks the appropriate
   binary, forwards arguments/signals/exit status, and cleans its temporary
   directory on normal exit. There are no install scripts or extra downloads.
-  npm publication is still pending.
+  The shorter `npx yolostart --dry-run` awaits npm registry publication.
 
 The intended custom hostname is `yolostart.sh`; acquisition/DNS/TLS remain
 pending. `YOLOSTART_VERSION=0.2.0` pins the shell's release. For npm, use
-`npx yolostart@0.2.0`. Git is required for repository discovery and metadata.
+`npx https://yolostart-sh.yolo.host/releases/0.2.0/yolostart-0.2.0.tgz`.
+After registry publication, `npx yolostart@0.2.0` also works. Git is required for repository discovery and metadata.
 
 ## Current scope: login, scan, dry-run
 

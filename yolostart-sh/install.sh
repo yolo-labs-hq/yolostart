@@ -38,7 +38,9 @@ cat <<'BANNER'
 |   No sudo. Dry runs upload nothing. Secret files stay excluded.              |
 |   Import approval and workspace creation are coming next.                    |
 |                                                                              |
-|   Prefer npm? npx yolostart --dry-run (npm publication pending).             |
+| PREFER NPX?  /  SAME NATIVE CLI                                              |
+|   npx https://yolostart-sh.yolo.host/yolostart.tgz --dry-run                 |
+|   The shorter npx yolostart name awaits npm publication.                     |
 |   Explore YOLO Studio: https://yolo.studio                                   |
 |   Read this script before running it. The code starts below.                 |
 +------------------------------------------------------------------------------+
