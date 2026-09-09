@@ -94,7 +94,7 @@ func (d *importDriver) request(ctx context.Context, method, route string, body, 
 		} else {
 			raw, readErr := io.ReadAll(io.LimitReader(res.Body, (2<<20)+1))
 			res.Body.Close()
-			transient = res.StatusCode >= 500 || res.StatusCode == 429
+			transient = res.StatusCode >= 500
 			if res.StatusCode < 200 || res.StatusCode >= 300 {
 				refusal := struct {
 					Reason  string `json:"reason"`
@@ -251,6 +251,25 @@ func (d *importDriver) upload(ctx context.Context, route string, bundle packedBu
 	}
 	return errors.New("bundle upload failed")
 }
+
+// The current server distinguishes HEAD misses by this message, not a unique
+// reason. Match the complete refusal; every other 4xx is terminal.
+func uploadNotArrived(err error) bool {
+	var refusal *apiError
+	return errors.As(err, &refusal) && refusal.status == 400 && refusal.reason == "bundle-invalid" && refusal.message == "The upload has not arrived. PUT the bundle to uploadUrl, then finalize."
+}
+func (d *importDriver) finalize(ctx context.Context, route string, bundle packedBundle, id string) error {
+	for attempt := 0; ; attempt++ {
+		err := d.request(ctx, "POST", route+"/bundle/finalize", map[string]any{"bundleId": id, "fileList": bundle.files}, nil, true)
+		if !uploadNotArrived(err) || attempt == 2 {
+			return err
+		}
+		if err = d.sleep(ctx, time.Duration(attempt+1)*time.Second); err != nil {
+			return err
+		}
+	}
+}
+
 func (d *importDriver) execute(ctx context.Context, manifest ScanManifest, inventories map[string]inventory, out io.Writer) (result error) {
 	var created importSession
 	if e := d.request(ctx, "POST", "/yolostart/sessions", map[string]any{"manifest": manifest}, &created, false); e != nil {
@@ -269,9 +288,9 @@ func (d *importDriver) execute(ctx context.Context, manifest ScanManifest, inven
 		return e
 	}
 	reason := "aborted"
-	workspaceExists := false
+	serverOwnsVerdict := false
 	defer func() {
-		if result == nil || workspaceExists {
+		if result == nil || serverOwnsVerdict {
 			return
 		}
 		if ctx.Err() != nil {
@@ -318,7 +337,11 @@ func (d *importDriver) execute(ctx context.Context, manifest ScanManifest, inven
 		}
 		return e
 	}
-	if e = d.request(ctx, "POST", route+"/bundle/finalize", map[string]any{"bundleId": grant.BundleID, "fileList": bundle.files}, nil, true); e != nil {
+	if e = d.finalize(ctx, route, bundle, grant.BundleID); e != nil {
+		var refusal *apiError
+		if errors.As(e, &refusal) && refusal.status >= 400 && refusal.status < 500 && !uploadNotArrived(e) {
+			serverOwnsVerdict = true // Server owns the terminal refusal; do not overwrite it with /fail.
+		}
 		return e
 	}
 	reason = "aborted"
@@ -326,7 +349,7 @@ func (d *importDriver) execute(ctx context.Context, manifest ScanManifest, inven
 		return e
 	}
 	// Creation was acknowledged; the pod exclusively owns the verdict from here.
-	workspaceExists = true
+	serverOwnsVerdict = true
 	seeded, e := d.wait(ctx, route, true)
 	if e != nil {
 		return e

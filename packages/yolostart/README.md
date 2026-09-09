@@ -1,4 +1,4 @@
-# yolostart 0.3.0
+# yolostart 0.3.1
 
 One native CLI, two entry points:
 
@@ -17,7 +17,7 @@ The custom hostname `yolostart.sh` is live (operator-verified). `YOLOSTART_VERSI
 `npx https://yolostart-sh.yolo.host/releases/0.2.0/yolostart-0.2.0.tgz`.
 After registry publication, `npx yolostart@0.2.0` also works. Git is required for repository discovery and metadata.
 
-## Import flow (0.3.0; server integration pending)
+## Import flow (0.3.1; server integration pending)
 
 Without `--dry-run`, the CLI signs in, scans, creates an approval session, prints
 the browser URL, and waits. The browser picks one candidate, its workspace name
@@ -68,12 +68,15 @@ new secret-shaped JSON fail with `files-changed`. Exclusions match whole paths
 or descendants (`src` does not exclude `src2`). Overflow paths hidden by the
 `[remaining paths]` summary ship only with explicit browser `includeOverflow: true`;
 the default omits them. Temporary archives contain
-regular files only and are capped at 100 MiB compressed. They are removed on
+regular files only and are capped at 100 MiB compressed and 1 GiB expanded. They are removed on
 completion or failure. SIGINT/SIGTERM allow bounded failure reporting and cleanup.
 
 `.git/config` is rebuilt in the archive from portable format settings, clean
 remotes and branch tracking. Credential helpers, HTTP headers, includes and local
-commands are dropped; the original config is unchanged. Git history/objects are
+commands and push URLs are dropped; the original config is unchanged. Hooks
+are excluded and reported during scanning. Repositories requiring Git extensions
+(such as SHA-256 object storage) fail locally rather than losing required settings.
+Portable config is capped at 64 KiB, with 2048-byte values. Git history/objects are
 **not secret-scanned**: committed secrets can remain, as browser approval must
 explain. Working-tree secret exclusions remain mandatory.
 
@@ -94,3 +97,8 @@ publishing subsequent versions so pinned shell installs remain available.
 
 This native + optional npm architecture supersedes the plan's original
 npm-only bootstrap choice at the operator's request. The plan is left unchanged.
+
+Finalize retries a HEAD-miss refusal at most twice after PUT succeeds. The current
+server uses `bundle-invalid` for both HEAD misses and invalid archives, so the
+client matches the exact HEAD-miss message; other 4xx refusals are printed and
+are neither retried nor overwritten by a client failure report.

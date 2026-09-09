@@ -115,6 +115,14 @@ func TestPackOnlyApprovedSnapshotAndSanitizeConfig(t *testing.T) {
 	if files["src2/keep.txt"] != "keep" || files["src/omit.txt"] != "" || files[".env"] != "" || files["account.json"] != "" || files["new-after-scan.txt"] != "" {
 		t.Fatal(files)
 	}
+	for name := range files {
+		if strings.HasPrefix(name, ".git/hooks/") {
+			t.Fatal("hook shipped", name)
+		}
+	}
+	if !slices.Contains(inv.manifest.Excluded.Skipped, ".git/hooks") {
+		t.Fatal("hooks not reported excluded")
+	}
 	config := files[".git/config"]
 	if !strings.Contains(config, "https://github.com/org/repo") || strings.Contains(config, "SECRET") || strings.Contains(config, "helper") || strings.Contains(config, "extraheader") || strings.Contains(config, "include") {
 		t.Fatal(config)
@@ -190,6 +198,22 @@ func TestOverflowRequiresExplicitApproval(t *testing.T) {
 		}
 		if len(b.files) != want {
 			t.Fatal(include, len(b.files))
+		}
+	}
+}
+
+func TestPortableConfigMatchesServerAllowlist(t *testing.T) {
+	data, err := sanitizedConfig(context.Background(), []byte("[remote \"origin\"]\nurl=https://user:TOKEN@host/repo\npushurl=https://host/push\n[core]\nprecomposeunicode=true\nlogallrefupdates=true\n"), t.TempDir())
+	if err != nil || bytes.Contains(data, []byte("pushurl")) || bytes.Contains(data, []byte("TOKEN")) || !bytes.Contains(data, []byte("precomposeunicode = true")) {
+		t.Fatal(string(data), err)
+	}
+	for _, config := range []string{
+		"[extensions]\nobjectformat=sha256\n",
+		"[extensions]\nworktreeconfig=true\n",
+		"[remote \"origin\"]\nurl=https://host/" + strings.Repeat("x", 2048) + "\n",
+	} {
+		if _, err := sanitizedConfig(context.Background(), []byte(config), t.TempDir()); err == nil {
+			t.Fatal("unsupported config accepted")
 		}
 	}
 }

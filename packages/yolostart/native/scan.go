@@ -363,6 +363,10 @@ func BuildManifest(root, scanRoot string, isRepo bool) (Manifest, []string, erro
 		for _, entry := range entries {
 			rel := filepath.ToSlash(filepath.Join(relative, entry.Name()))
 			full := filepath.Join(root, rel)
+			if rel == ".git/hooks" {
+				m.Excluded.Skipped = append(m.Excluded.Skipped, rel)
+				continue
+			}
 			if sensitivePath(rel) {
 				m.Excluded.Sensitive = append(m.Excluded.Sensitive, rel)
 				continue

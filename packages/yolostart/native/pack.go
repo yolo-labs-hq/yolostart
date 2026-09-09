@@ -20,6 +20,7 @@ import (
 )
 
 const BundleLimit int64 = 100 << 20
+const ExpandedLimit int64 = 1 << 30
 
 var errFilesChanged = errors.New("files changed after scanning; re-run for fresh browser approval")
 
@@ -169,9 +170,12 @@ func sanitizedConfig(ctx context.Context, data []byte, dir string) ([]byte, erro
 			continue
 		}
 		section, field := strings.ToLower(key[:first]), strings.ToLower(key[last+1:])
+		if section == "extensions" {
+			return nil, errors.New("Git repository extensions are not supported by import; history cannot be safely rewritten")
+		}
 		if first == last {
-			if section == "core" && (field == "repositoryformatversion" || field == "filemode" || field == "ignorecase") || section == "extensions" && field == "objectformat" {
-				if value != "0" && value != "1" && value != "true" && value != "false" && value != "sha1" && value != "sha256" {
+			if section == "core" && (field == "repositoryformatversion" || field == "filemode" || field == "ignorecase" || field == "logallrefupdates" || field == "precomposeunicode") {
+				if value != "0" && value != "1" && value != "true" && value != "false" {
 					return nil, errors.New("unsupported portable Git configuration")
 				}
 				fmt.Fprintf(&out, "[%s]\n\t%s = %s\n", section, field, value)
@@ -179,21 +183,27 @@ func sanitizedConfig(ctx context.Context, data []byte, dir string) ([]byte, erro
 			continue
 		}
 		subsection := key[first+1 : last]
-		if strings.ContainsAny(subsection, "\x00\r\n") {
+		if len(strconv.Quote(subsection))-2 > 255 || strings.ContainsAny(subsection, "\x00\r\n") {
 			return nil, errors.New("invalid Git subsection")
 		}
-		if section == "remote" && (field == "url" || field == "pushurl") {
+		if section == "remote" && field == "url" {
 			clean := safeRemote(value)
 			if clean == nil {
 				continue
 			}
+			if len(strconv.Quote(*clean)) > 2048 {
+				return nil, errors.New("Git remote URL exceeds import limit")
+			}
 			fmt.Fprintf(&out, "[remote %s]\n\t%s = %s\n", strconv.Quote(subsection), field, strconv.Quote(*clean))
 		} else if section == "remote" && field == "fetch" || section == "branch" && (field == "remote" || field == "merge") {
-			if strings.ContainsAny(value, "\x00\r\n") {
+			if len(strconv.Quote(value)) > 2048 || strings.ContainsAny(value, "\x00\r\n") {
 				return nil, errors.New("invalid Git tracking configuration")
 			}
 			fmt.Fprintf(&out, "[%s %s]\n\t%s = %s\n", section, strconv.Quote(subsection), field, strconv.Quote(value))
 		}
+	}
+	if out.Len() > 64<<10 {
+		return nil, errors.New("portable Git config exceeds 64 KiB")
 	}
 	return out.Bytes(), nil
 }
@@ -231,7 +241,7 @@ func pack(ctx context.Context, inv inventory, prefixes []string, includeOverflow
 		}
 	}
 	allowed := func(p string) bool {
-		if excludedPath(p, prefixes) {
+		if p == ".git/hooks" || strings.HasPrefix(p, ".git/hooks/") || excludedPath(p, prefixes) {
 			return false
 		}
 		for _, row := range inv.manifest.Tree {
@@ -264,7 +274,7 @@ func pack(ctx context.Context, inv inventory, prefixes []string, includeOverflow
 	if total == 0 {
 		return result, errors.New("approval leaves no files to import")
 	}
-	var historyBytes int64
+	var historyBytes, expandedBytes int64
 	for _, p := range inv.paths {
 		if e = ctx.Err(); e != nil {
 			return result, e
@@ -290,6 +300,10 @@ func pack(ctx context.Context, inv inventory, prefixes []string, includeOverflow
 			if e != nil {
 				return result, e
 			}
+		}
+		expandedBytes += int64(len(data))
+		if expandedBytes > ExpandedLimit {
+			return result, errors.New("archive expands past 1 GiB; narrow the import")
 		}
 		if e = tw.WriteHeader(&tar.Header{Name: p, Mode: int64(mode.Perm() & 0777), Size: int64(len(data)), Typeflag: tar.TypeReg, Format: tar.FormatPAX}); e != nil {
 			return result, e

@@ -9,13 +9,13 @@ import { pathToFileURL, fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { launch } from "../src/launcher.js";
 const dist = new URL("../dist/", import.meta.url);
-const native = new URL("native/0.3.0/", dist);
+const native = new URL("native/0.3.1/", dist);
 
 test("npm wrapper runs the same native executable and forwards help/version", async () => {
   const manifest = JSON.parse(
     await readFile(new URL("manifest.json", native), "utf8"),
   );
-  assert.equal(manifest.version, "0.3.0");
+  assert.equal(manifest.version, "0.3.1");
   assert.deepEqual(Object.keys(manifest.files).sort(), [
     "darwin-amd64",
     "darwin-arm64",
@@ -38,7 +38,7 @@ test("npm wrapper runs the same native executable and forwards help/version", as
     );
   }
   for (const [args, expected] of [
-    [["--version"], /0\.3\.0/],
+    [["--version"], /0\.3\.1/],
     [["--help"], /Usage: yolostart/],
   ] as const) {
     const result = spawnSync(

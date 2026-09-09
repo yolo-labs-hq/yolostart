@@ -17,7 +17,7 @@ import (
 )
 
 func TestImportWorkflow(t *testing.T) {
-	for _, scenario := range []string{"success", "denied", "changed", "upload-failed", "seed-failed", "timeout", "ready-without-seed", "retry-create", "retry-finalize"} {
+	for _, scenario := range []string{"success", "denied", "changed", "upload-failed", "seed-failed", "timeout", "ready-without-seed", "retry-create", "retry-finalize", "head-miss", "finalize-refused", "finalize-invalid", "finalize-throttled"} {
 		t.Run(scenario, func(t *testing.T) {
 			root := t.TempDir()
 			put(t, root, "keep.txt", "approved content")
@@ -110,6 +110,23 @@ func TestImportWorkflow(t *testing.T) {
 					if body.BundleID != "bundle-1" || strings.Join(body.Files, ",") != "keep.txt" {
 						t.Error(body)
 					}
+					if scenario == "head-miss" && finalizes == 1 {
+						w.WriteHeader(400)
+						fmt.Fprint(w, `{"reason":"bundle-invalid","message":"The upload has not arrived. PUT the bundle to uploadUrl, then finalize."}`)
+						return
+					}
+					if scenario == "finalize-refused" || scenario == "finalize-invalid" || scenario == "finalize-throttled" {
+						code, reason := 409, "approval-mismatch"
+						if scenario == "finalize-throttled" {
+							code, reason = 429, "rate-limit"
+						}
+						if scenario == "finalize-invalid" {
+							code, reason = 400, "bundle-invalid"
+						}
+						w.WriteHeader(code)
+						fmt.Fprintf(w, `{"reason":%q,"message":"server rejected archive"}`, reason)
+						return
+					}
 					if scenario == "retry-finalize" && finalizes == 1 {
 						w.WriteHeader(503)
 					}
@@ -147,7 +164,7 @@ func TestImportWorkflow(t *testing.T) {
 			transport.DisableCompression = true
 			d.uploadClient = &http.Client{Transport: transport}
 			err := d.execute(context.Background(), manifest, invs, &out)
-			success := scenario == "success" || scenario == "retry-create" || scenario == "retry-finalize"
+			success := scenario == "success" || scenario == "retry-create" || scenario == "retry-finalize" || scenario == "head-miss"
 			if success {
 				if err != nil || out.String() != "https://yolo.studio/workspace?id=ws-1\n" {
 					t.Fatal(out.String(), err)
@@ -164,13 +181,18 @@ func TestImportWorkflow(t *testing.T) {
 			if scenario == "upload-failed" && (failure != "upload-failed" || finalizes != 0 || creates != 0) {
 				t.Fatal(failure, finalizes, creates)
 			}
+			if scenario == "finalize-refused" || scenario == "finalize-invalid" || scenario == "finalize-throttled" {
+				if failure != "" || finalizes != 1 || creates != 0 || !strings.Contains(err.Error(), "server rejected archive") {
+					t.Fatal(failure, finalizes, creates, err)
+				}
+			}
 			if creates > 0 && failure != "" {
 				t.Fatal("client overrode pod verdict")
 			}
 			if scenario == "retry-create" && creates != 2 {
 				t.Fatal(creates)
 			}
-			if scenario == "retry-finalize" && finalizes != 2 {
+			if (scenario == "retry-finalize" || scenario == "head-miss") && finalizes != 2 {
 				t.Fatal(finalizes)
 			}
 			for i := 1; i < len(times); i++ {
