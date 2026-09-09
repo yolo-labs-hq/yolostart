@@ -1,7 +1,7 @@
 {
   "name": "yolostart",
-  "version": "0.2.0",
-  "description": "Native YOLO Studio project preview CLI, also available through npx",
+  "version": "0.3.0",
+  "description": "Native YOLO Studio project import CLI, also available through npx",
   "license": "MIT",
   "type": "module",
   "bin": {

@@ -1,4 +1,4 @@
-# yolostart 0.2.0
+# yolostart 0.3.0
 
 One native CLI, two entry points:
 
@@ -13,25 +13,37 @@ One native CLI, two entry points:
   directory on normal exit. There are no install scripts or extra downloads.
   The shorter `npx yolostart --dry-run` awaits npm registry publication.
 
-The intended custom hostname is `yolostart.sh`; acquisition/DNS/TLS remain
-pending. `YOLOSTART_VERSION=0.2.0` pins the shell's release. For npm, use
+The custom hostname `yolostart.sh` is live (operator-verified). `YOLOSTART_VERSION=0.2.0` pins the shell's release. For npm, use
 `npx https://yolostart-sh.yolo.host/releases/0.2.0/yolostart-0.2.0.tgz`.
 After registry publication, `npx yolostart@0.2.0` also works. Git is required for repository discovery and metadata.
 
-## Current scope: login, scan, dry-run
+## Import flow (0.3.0; server integration pending)
 
-`--dry-run` signs in through the existing YOLO device flow, observes local
-repositories, and prints JSON metadata on stdout. Progress goes to stderr.
-Tokens stay in memory. After installation, the only network calls are device
-code creation and token polling. No upload, approval session, workspace
-creation, credential persistence, or terminal interaction is implemented.
-Without `--dry-run`, the CLI explains that import is not yet available.
+Without `--dry-run`, the CLI signs in, scans, creates an approval session, prints
+the browser URL, and waits. The browser picks one candidate, its workspace name
+and excluded path prefixes. The CLI packs only that candidate's scanned files,
+PUTs a checksummed tar.gz directly to the presigned URL, finalizes, and requests a
+workspace. Finalization and creation retry the same bundle ID on transient
+failures. The workspace ID comes from session polling; only pod-reported
+`seed.status: succeeded` produces a workspace URL. Denial, expiry, failure and
+polling timeout exit unsuccessfully. Approval and seed polling each have a
+20-minute limit. No terminal input is used.
+
+`--dry-run` authenticates and prints JSON metadata on stdout. Tokens stay in
+memory. After installation, its only network calls are device code creation and
+token polling; it creates no approval session and uploads nothing. The npm
+wrapper runs the same native program and flags.
+
+Local HTTPS fixtures exercise the agreed S2/S4/S5 client contract; a real
+browser-to-pod import awaits the server owner's branch and deployment. The
+currently hosted tarball remains the earlier release until this change is
+reviewed and shipped. Registry publication requires operator npm credentials.
 
 `--scan ~/code` changes the starting directory. A repo at or above that
 location wins; otherwise discovery examines children through depth two.
 Multiple repos all become candidates, ordered by commit recency then mtime.
 No repos yields one `adopt-dir` candidate. All import decisions belong to the
-future browser approval page. `--project <name-or-relative-path>` narrows
+browser approval page. `--project <name-or-relative-path>` narrows
 observation; duplicate names require the relative path. Other repos contribute
 only names, never file metadata, when this explicit filter is used.
 
@@ -44,11 +56,26 @@ Excluded directory names represent their complete subtrees. `gitignored` counts
 inspected ignored files. The tree is capped at two path segments and 200 entries,
 with overflow aggregated. Per-file ceiling: 25 MiB; include ceiling: 20,000 files.
 
-Ordinary `.git` files are counted; worktree `.git` pointers are excluded and
-reported because their targets are outside the selected root. Before S4, a
-policy for credentials in Git history/config and a `.git` size ceiling are
-still needed. Filename exclusions cannot sanitize opaque objects. Compressed
-100 MiB enforcement belongs to the future packer. S1 uploads nothing.
+`GitInfo.historyBytes` measures aggregate logical regular-file bytes under
+`.git`, without following symlinks. `historyIncluded` is true only for a local
+`.git` directory at or below 25 MiB. Larger histories are omitted and reported
+under `excluded.skipped`; their remote stays in the manifest for server recording.
+Worktree `.git` pointers report zero bytes and `historyIncluded: false`.
+
+The packer retains the scanned include list and hashes locally. Newly added
+files never join the upload; changed/deleted files, changed modes, symlinks or
+new secret-shaped JSON fail with `files-changed`. Exclusions match whole paths
+or descendants (`src` does not exclude `src2`). Overflow paths hidden by the
+`[remaining paths]` summary ship only with explicit browser `includeOverflow: true`;
+the default omits them. Temporary archives contain
+regular files only and are capped at 100 MiB compressed. They are removed on
+completion or failure. SIGINT/SIGTERM allow bounded failure reporting and cleanup.
+
+`.git/config` is rebuilt in the archive from portable format settings, clean
+remotes and branch tracking. Credential helpers, HTTP headers, includes and local
+commands are dropped; the original config is unchanged. Git history/objects are
+**not secret-scanned**: committed secrets can remain, as browser approval must
+explain. Working-tree secret exclusions remain mandatory.
 
 ## Development and release
 

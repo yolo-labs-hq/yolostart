@@ -26,10 +26,12 @@ type Resolution struct {
 	Candidates []Candidate
 }
 type GitInfo struct {
-	Remote       *string `json:"remote"`
-	Branch       *string `json:"branch"`
-	LastCommitAt *string `json:"lastCommitAt"`
-	Dirty        bool    `json:"dirty"`
+	Remote          *string `json:"remote"`
+	Branch          *string `json:"branch"`
+	LastCommitAt    *string `json:"lastCommitAt"`
+	Dirty           bool    `json:"dirty"`
+	HistoryBytes    int64   `json:"historyBytes"`
+	HistoryIncluded bool    `json:"historyIncluded"`
 }
 type TreeEntry struct {
 	Path      string `json:"path"`
@@ -292,6 +294,39 @@ func safeRemote(s string) *string {
 	}
 	return nil
 }
+
+// HistoryLimit measures logical regular-file bytes, without following links.
+const HistoryLimit int64 = 25 << 20
+
+func historySize(root string) (int64, bool, error) {
+	marker := filepath.Join(root, ".git")
+	info, err := os.Lstat(marker)
+	if os.IsNotExist(err) {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, err
+	}
+	if !info.IsDir() {
+		return 0, false, nil
+	} // Worktree pointers are not portable history.
+	var total int64
+	err = filepath.WalkDir(marker, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		if info.Mode().IsRegular() {
+			total += info.Size()
+		}
+		return nil
+	})
+	return total, true, err
+}
+
 func BuildManifest(root, scanRoot string, isRepo bool) (Manifest, []string, error) {
 	rel, e := filepath.Rel(scanRoot, root)
 	if e != nil {
@@ -301,6 +336,17 @@ func BuildManifest(root, scanRoot string, isRepo bool) (Manifest, []string, erro
 	if isRepo {
 		m.Kind = "repo"
 		m.Git = &GitInfo{Remote: safeRemote(git(root, "remote", "get-url", "origin")), Branch: nullable(git(root, "symbolic-ref", "--short", "HEAD")), LastCommitAt: nullable(git(root, "log", "-1", "--format=%cI")), Dirty: git(root, "status", "--porcelain", "--untracked-files=normal") != ""}
+	}
+	if m.Git != nil {
+		size, available, err := historySize(root)
+		if err != nil {
+			return m, nil, err
+		}
+		m.Git.HistoryBytes = size
+		m.Git.HistoryIncluded = available && size <= HistoryLimit
+		if available && !m.Git.HistoryIncluded {
+			m.Excluded.Skipped = append(m.Excluded.Skipped, ".git")
+		}
 	}
 	includes := []string{}
 	summary := map[string]int{}
@@ -367,6 +413,9 @@ func BuildManifest(root, scanRoot string, isRepo bool) (Manifest, []string, erro
 					m.Excluded.Sensitive = append(m.Excluded.Sensitive, rel)
 					continue
 				}
+			}
+			if strings.HasPrefix(rel, ".git/") && (m.Git == nil || !m.Git.HistoryIncluded) {
+				continue
 			}
 			if isIgnored {
 				m.Excluded.Gitignored++

@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 )
 
 func main() {
@@ -25,6 +26,11 @@ func main() {
 		}
 	case sig := <-signals:
 		cancel()
+		// Allow the bounded failure report and temporary-file cleanup to finish.
+		select {
+		case <-done:
+		case <-time.After(6 * time.Second):
+		}
 		if sig == syscall.SIGTERM {
 			os.Exit(143)
 		}

@@ -247,7 +247,7 @@ func TestDryRunHasOnlyAuthAndNoInput(t *testing.T) {
 	if calls != 1 || m.Mode != "plain" || strings.Contains(out.String()+errOut.String(), "PRIVATE-TOKEN") {
 		t.Fatal(out.String())
 	}
-	for _, args := range [][]string{{"--help"}, {"--version"}, {}} {
+	for _, args := range [][]string{{"--help"}, {"--version"}} {
 		calls = 0
 		_ = run(context.Background(), args, &out, &errOut, login)
 		if calls != 0 {

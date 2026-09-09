@@ -23,7 +23,7 @@ func run(ctx context.Context, args []string, out, errOut io.Writer, login func(c
 	dry := flags.Bool("dry-run", false, "print candidate metadata without uploading")
 	version := flags.Bool("version", false, "print version")
 	flags.Usage = func() {
-		fmt.Fprintln(out, "Usage: yolostart --dry-run [--scan <directory>] [--project <name-or-relative-path>]\nSigns in and prints candidate metadata. Nothing uploads.\nAll import decisions belong to browser approval (not yet available).\nGit is required for repository discovery; no language runtime is needed.")
+		fmt.Fprintln(out, "Usage: yolostart [--dry-run] [--scan <directory>] [--project <name-or-relative-path>]\nSigns in, scans, and prints browser approval before importing one project.\n--dry-run prints metadata without creating an approval session or uploading.\nGit is required for repository discovery; no language runtime is needed.")
 	}
 	if e := flags.Parse(args); e != nil {
 		if errors.Is(e, flag.ErrHelp) {
@@ -38,10 +38,8 @@ func run(ctx context.Context, args []string, out, errOut io.Writer, login func(c
 		fmt.Fprintln(out, Version)
 		return nil
 	}
-	if !*dry {
-		return errors.New("import is not yet available; use --dry-run to preview a manifest; nothing will upload")
-	}
-	if _, e := login(ctx); e != nil {
+	token, e := login(ctx)
+	if e != nil {
 		return e
 	}
 	if *scan == "" {
@@ -50,6 +48,13 @@ func run(ctx context.Context, args []string, out, errOut io.Writer, login func(c
 			return e
 		}
 		*scan = cwd
+	}
+	if !*dry {
+		manifest, inventories, e := scanImport(ctx, *scan, *project)
+		if e != nil {
+			return e
+		}
+		return newImport(errOut, token).execute(ctx, manifest, inventories, out)
 	}
 	manifest, e := Scan(*scan, *project)
 	if e != nil {
