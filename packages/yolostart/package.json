@@ -1,0 +1,34 @@
+{
+  "name": "yolostart",
+  "version": "0.1.0",
+  "description": "Preview a local project import into YOLO Studio",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "yolostart": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck:test": "tsc -p tsconfig.test.json --noEmit",
+    "test": "npm run build && tsx --test test/*.test.ts",
+    "prepublishOnly": "npm run build && npm run typecheck:test && npm test"
+  },
+  "dependencies": {
+    "ignore": "^7.0.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.4.0"
+  }
+}
