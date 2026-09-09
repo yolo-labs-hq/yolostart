@@ -1,22 +1,50 @@
 #!/bin/sh
-# Inspect this script before running: curl -fsSL https://yolostart.sh
-# Run: curl -fsSL https://yolostart.sh | sh -s -- --dry-run --scan ~/code
-# Pin the CLI with YOLOSTART_VERSION. Missing Node/npm is fetched temporarily.
-# This bootstrapper only writes temporary runtime/cache files. Decisions belong
-# to browser approval. Currently only --dry-run is available; nothing uploads.
+# POSIX bootstrapper. ASCII mark adapted from the YOLO octopus brand asset.
 set -eu
-
-if [ -t 1 ] && [ "${NO_COLOR+x}" != x ]; then printf '\033[36m'; fi
+if [ -t 1 ] && [ "${NO_COLOR+x}" != x ]; then printf '\033[32m'; fi
 cat <<'BANNER'
-                __           __             __
-   __  ______  / /___  _____/ /_____ ______/ /_
-  / / / / __ \/ / __ \/ ___/ __/ __ `/ ___/ __/
- / /_/ / /_/ / / /_/ (__  ) /_/ /_/ / /  / /_
- \__, /\____/_/\____/____/\__/\__,_/_/   \__/
-/____/
++------------------------------------------------------------------------------+
+|          ######           YOLO STUDIO  /  FROM LOCAL TO CLOUD                |
+|        ##########                                                            |
+|       ##   ##   ##                        __           __             __     |
+|       ##   ##   ##           __  ______  / /___  _____/ /_____ ______/ /_    |
+|       ############          / / / / __ \/ / __ \/ ___/ __/ __ `/ ___/ __/    |
+| ########################   / /_/ / /_/ / / /_/ (__  ) /_/ /_/ / /  / /_      |
+|  ######## #### #######     \__, /\____/_/\____/____/\__/\__,_/_/   \__/      |
+|    ###  #### ###  ###     /____/                                             |
+|    #     ######     #                                                        |
+|    #     ## ####    #     YOUR NEXT WORKSPACE STARTS HERE.                   |
+|    ###   ##   ##  ###                                                        |
+|      ##  #   ##  ##       Local work. Cloud possibilities.                   |
+|         ## ###            You decide what comes along.                       |
+|         ##                                                                   |
+|          ###              EARLY ACCESS  /  DRY-RUN PREVIEW                   |
+|                                                                              |
+| START WITH A LOOK AROUND                                                     |
+|   1. Run from your project folder, or use --scan ~/code.                     |
+|   2. Sign in through the browser link printed below.                         |
+|   3. Read the manifest: candidates, file counts, and exclusions.             |
+|                                                                              |
+| QUICK START  (once the domain and npm release are live)                      |
+|   curl -fsSL https://yolostart.sh | sh -s -- --dry-run                       |
+|                                                                              |
+| MAKE IT YOURS                                                                |
+|   --scan ~/code       Look for projects in a different directory.            |
+|   --project my-app    Limit the scan to one named repository.                |
+|   YOLOSTART_VERSION  Pin a CLI release instead of using latest.              |
+|                                                                              |
+| YOUR WORK, YOUR CALL                                                         |
+|   No Node setup needed on supported macOS/Linux machines.                    |
+|   No sudo. Dry runs upload nothing. Secret files stay excluded.              |
+|   Import approval and workspace creation are coming next.                    |
+|                                                                              |
+|   Publication pending: the npm package is not available yet.                 |
+|   Explore YOLO Studio: https://yolo.studio                                   |
+|   Read this script before running it. The code starts below.                 |
++------------------------------------------------------------------------------+
 BANNER
 if [ -t 1 ] && [ "${NO_COLOR+x}" != x ]; then printf '\033[0m'; fi
-printf '\nPreview a local project for YOLO Studio. Nothing uploads.\n\n'
+printf '\n'
 
 fail() { printf 'yolostart: %s\n' "$*" >&2; exit 1; }
 npm_config_cache=$(mktemp -d "${TMPDIR:-/tmp}/yolostart.XXXXXXXX")
