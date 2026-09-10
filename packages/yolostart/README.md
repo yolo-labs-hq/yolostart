@@ -199,3 +199,12 @@ prints an advisory warning to stderr after scanning, before session creation
 (or alongside the dry-run manifest): create the first commit locally and rerun
 to rescan it. A multi-repo scan leaves the choice and warning to the approval
 page. This warning never prompts, commits, or blocks an import.
+
+Before npm publication (including publish-workflow dry-runs), all four platform
+artifacts must be publicly available from both dl and the Host paths used by the
+bootstrap. The gate extracts digest pins from the exact scanned npm tarball and
+checks both compressed and executable bytes. Missing, changed or untrusted-redirect
+responses fail the job before the credential-bearing publish step. A successful
+dl upload alone is insufficient: Host must serve the version too. After native
+publication and Host promotion, retry with workflow_dispatch. No package is
+published while waiting for those release surfaces to become ready.
