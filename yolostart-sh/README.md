@@ -94,12 +94,15 @@ Only a complete set verified byte-for-byte is removed from the local asset
 bundle; old releases absent from that bucket remain on Host. Checksums, manifest
 and notices remain local, and every old `/releases/<version>/...` URL survives.
 
-The Worker embeds an exact URL, size and SHA-256 for each externally served
-payload. It fetches without redirects or user credentials and verifies the
-length and digest before returning any bytes. Failure returns a download error,
-never an unverified executable. This also lets a subsequent clean build restore
-archives through their original Host URLs. The existing downloads bucket must
-retain these immutable objects; no bucket, credential or DNS change is needed.
-If sufficient identical copies cannot be verified, the build stops rather than
-discarding pins or shipping an oversized bundle. Public verification uses the
-same product User-Agent as the downloads workflow.
+The Worker redirects each externally stored payload to the exact versioned URL
+verified at build time. This avoids a Worker-to-downloads request being refused
+by the edge while ordinary client requests work. The installer follows the
+HTTPS redirect and verifies its existing checksum before execution. Clean
+release restoration permits only an exact artifact redirect to the known
+`dl.yolo.studio/yolostart/<version>/<filename>` destination, then verifies the
+archive against its pinned digest and size. Other redirects remain refused.
+The existing downloads bucket must retain these immutable objects; no bucket,
+credential or DNS change is needed. If sufficient identical copies cannot be
+verified at build time, the build stops rather than discarding pins or shipping
+an oversized bundle. Public verification uses the same product User-Agent as
+the downloads workflow.

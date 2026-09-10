@@ -56,3 +56,21 @@ test('missing or changed release data stops the build instead of losing pins',as
  const different=await fixture(t,'1.0.0','different');
  await assert.rejects(addRelease(bootstrap,different.archive,'1.0.0',join(old.dir,'repack')),/immutable/);
 });
+
+test('clean restore follows only the exact downloads redirect and still verifies archive bytes',async t=>{
+ const old=await fixture(t,'1.0.0');const index={schemaVersion:1,releases:[old.record]};
+ const target='https://dl.yolo.studio/yolostart/1.0.0/yolostart-1.0.0.tgz';
+ for(const corrupt of [false,true]){
+  let followed=false;
+  const fetchImpl=async(url,options)=>{
+   if(url===target){followed=true;assert.equal(options.redirect,'error');assert.match(options.headers['User-Agent'],/^yolostart-release/);return new Response(corrupt?Buffer.from('changed'):old.data);}
+   if(url.endsWith('index.json'))return Response.json(index);
+   if(url.endsWith('latest.txt'))return new Response('1.0.0');
+   assert.equal(options.redirect,'manual');return new Response(null,{status:307,headers:{Location:target}});
+  };
+  const dir=join(old.dir,'redirect-'+corrupt);
+  if(corrupt)await assert.rejects(restoreReleases(dir,index,fetchImpl),/checksum\/size mismatch/);
+  else {await restoreReleases(dir,index,fetchImpl);assert.deepEqual(await readFile(join(dir,'1.0.0','yolostart-1.0.0.tgz')),old.data);}
+  assert.equal(followed,true);
+ }
+});

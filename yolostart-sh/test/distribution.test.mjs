@@ -4,8 +4,7 @@ import {mkdtemp,mkdir,writeFile,readFile,rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {compactReleases} from '../distribution.mjs';
-import {serveDownload} from '../download-proxy.mjs';
-import {digest} from '../releases.mjs';
+import {digest,restoreReleases} from '../releases.mjs';
 
 async function fixture(run) {
  const dir=await mkdtemp(join(tmpdir(),'yolostart-distribution-'));
@@ -32,9 +31,8 @@ test('verified public payloads retain Host URLs and exact bytes while small meta
  for(const [path,record] of Object.entries(downloads)){
   assert.ok(path.startsWith('/releases/1.0.0/'));
   await assert.rejects(readFile(join(dir,path.slice('/releases/'.length))),{code:'ENOENT'});
-  const response=await serveDownload(record,fetchImpl);
-  assert.equal(response.status,200);
-  assert.deepEqual(Buffer.from(await response.arrayBuffer()),remote.get(record.url));
+  assert.equal(record.bytes,remote.get(record.url).length);
+  assert.equal(record.sha256,digest(remote.get(record.url)));
  }
 }));
 
@@ -51,11 +49,13 @@ test('absent or changed public copies never discard pins',async()=>{
  });
 });
 
-test('runtime proxy rejects error, truncated, oversized or mutated upstream bytes',async()=>{
- const data=Buffer.from('expected');const record={url:'https://dl.yolo.studio/yolostart/1.0.0/file.gz',bytes:data.length,sha256:digest(data)};
- for(const response of [new Response('no',{status:404}),new Response('short'),new Response('much too long'),new Response('mutated!')]){
-  const result=await serveDownload(record,async()=>response);
-  assert.equal(result.status,502);assert.equal(result.headers.get('cache-control'),'no-store');
-  assert.equal(await result.text(),'Release download unavailable');
+test('restoration refuses redirects except the exact artifact on the downloads origin',async()=>{
+ const bootstrap={schemaVersion:1,releases:[{version:'1.0.0',sha256:'a'.repeat(64),bytes:10}]};
+ for(const location of ['https://evil.test/file.tgz','https://dl.yolo.studio/yolostart/2.0.0/yolostart-2.0.0.tgz']){
+  const dir=await mkdtemp(join(tmpdir(),'yolostart-redirect-'));
+  try {
+   const fetchImpl=async url=>url.endsWith('index.json')?Response.json(bootstrap):url.endsWith('latest.txt')?new Response('1.0.0'):new Response(null,{status:307,headers:{location}});
+   await assert.rejects(restoreReleases(dir,bootstrap,fetchImpl),/Untrusted release redirect/);
+  } finally {await rm(dir,{recursive:true,force:true});}
  }
 });
