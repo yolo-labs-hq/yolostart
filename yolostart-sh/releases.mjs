@@ -19,7 +19,17 @@ export function validateIndex(index) {
   return index;
 }
 async function download(url, limit, fetchImpl) {
-  const response = await fetchImpl(url, {redirect:'error', cache:'no-store', signal:AbortSignal.timeout(60000)});
+  let response = await fetchImpl(url, {redirect:'manual', cache:'no-store', signal:AbortSignal.timeout(60000)});
+  if ([301,302,303,307,308].includes(response.status)) {
+    const source = new URL(url);
+    const target = response.headers.get('location');
+    // Only the exact historical artifact may move to our existing downloads
+    // bucket. No arbitrary redirect chains or origin supplied by a response.
+    const match = source.pathname.match(/^\/releases\/([0-9A-Za-z.-]+)\/(yolostart-[0-9A-Za-z.-]+\.tgz)$/);
+    if (source.origin !== new URL(releaseOrigin).origin || !match || target !== `https://dl.yolo.studio/yolostart/${match[1]}/${match[2]}`)
+      throw Error('Untrusted release redirect');
+    response = await fetchImpl(target, {redirect:'error', cache:'no-store', headers:{'User-Agent':'yolostart-release/1 (+https://yolo.studio)'}, signal:AbortSignal.timeout(60000)});
+  }
   if (!response.ok) { const error = Error(`Release restoration failed (HTTP ${response.status})`); error.status = response.status; throw error; }
   const chunks=[];let size=0;
   for await (const chunk of response.body) {

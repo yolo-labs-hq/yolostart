@@ -3,7 +3,6 @@ import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { restoreReleases, addRelease } from './releases.mjs';
 import { compactReleases } from './distribution.mjs';
-import { serveDownload } from './download-proxy.mjs';
 const result = spawnSync("npm", ["run", "build"], {
   cwd: new URL("../packages/yolostart/", import.meta.url),
   stdio: "inherit",
@@ -49,13 +48,12 @@ await writeFile(
 const script = ${JSON.stringify(script)};
 const landing = ${JSON.stringify(landing)};
 const downloads = ${JSON.stringify(downloads)};
-${serveDownload.toString()}
 export default { fetch(request, env) {
   const url = new URL(request.url);
   const noStore = url.pathname === '/yolostart.tgz' || url.pathname === '/releases/latest.txt' || url.pathname === '/releases/index.json';
   if (url.pathname === '/yolostart.tgz') url.pathname = '/releases/${version}/yolostart-${version}.tgz';
   if (url.pathname.startsWith('/releases/')) {
-    const response = downloads[url.pathname] ? serveDownload(downloads[url.pathname]) : env.ASSETS.fetch(new Request(url, request));
+    const response = downloads[url.pathname] ? new Response(null, {status:307, headers:{Location:downloads[url.pathname].url, 'Cache-Control':'public, max-age=31536000, immutable'}}) : env.ASSETS.fetch(new Request(url, request));
     if (!noStore) return response;
     return Promise.resolve(response).then(result => {
       const headers = new Headers(result.headers); headers.set('Cache-Control', 'no-store');
