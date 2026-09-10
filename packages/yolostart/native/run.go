@@ -70,6 +70,7 @@ func run(ctx context.Context, args []string, out, errOut io.Writer, login func(c
 		if e != nil {
 			return e
 		}
+		warnUnborn(manifest, errOut)
 		driver := newImport(errOut, token)
 		driver.base, driver.browser = urls.api, urls.app
 		driver.openBrowser = func(uri string) { openBrowser(uri, *noBrowser, errOut) }
@@ -79,9 +80,22 @@ func run(ctx context.Context, args []string, out, errOut io.Writer, login func(c
 	if e != nil {
 		return e
 	}
+	warnUnborn(manifest, errOut)
 	fmt.Fprintln(errOut, "Dry run only. Nothing uploaded. Excluded secrets must be supplied separately in the workspace.")
 	encoder := json.NewEncoder(out)
 	encoder.SetIndent("", "  ")
 	encoder.SetEscapeHTML(false)
 	return encoder.Encode(manifest)
+}
+
+// A multi-repo scan has no chosen project yet; the approval page warns for the
+// user's selection. Do not choose a candidate or warn about unselected repos.
+func warnUnborn(manifest ScanManifest, out io.Writer) {
+	if manifest.Mode != "single" || len(manifest.Candidates) != 1 {
+		return
+	}
+	candidate := manifest.Candidates[0]
+	if candidate.Kind == "repo" && candidate.Git != nil && candidate.Git.Unborn {
+		fmt.Fprintf(out, "%q has no commits yet. Workspace branching needs a commit. Consider creating one with git commit in this local project before uploading; if you do, stop and rerun yolostart to scan it again.\n", candidate.Name)
+	}
 }

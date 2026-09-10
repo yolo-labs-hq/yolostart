@@ -167,3 +167,9 @@ Regular-file mtimes are preserved in the archive and checked against the scan
 snapshot. Arbitrary empty project directories are not represented by the file
 manifest. Repeated sections in the sanitized Git config are valid Git syntax;
 credentials and executable config settings remain excluded.
+
+Git candidates explicitly report `git.unborn`. A single selected unborn repo
+prints an advisory warning to stderr after scanning, before session creation
+(or alongside the dry-run manifest): create the first commit locally and rerun
+to rescan it. A multi-repo scan leaves the choice and warning to the approval
+page. This warning never prompts, commits, or blocks an import.
