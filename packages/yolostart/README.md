@@ -1,4 +1,4 @@
-# yolostart 0.3.2
+# yolostart 0.3.3
 
 One native CLI, two entry points:
 
@@ -17,7 +17,7 @@ The custom hostname `yolostart.sh` is live (operator-verified). `YOLOSTART_VERSI
 `npx https://yolostart-sh.yolo.host/releases/0.2.0/yolostart-0.2.0.tgz`.
 After registry publication, `npx yolostart@0.2.0` also works. Git is required for repository discovery and metadata.
 
-## Import flow (0.3.2; server integration pending)
+## Import flow (0.3.3; server integration pending)
 
 Without `--dry-run`, the CLI signs in, scans, creates an approval session, prints
 the browser URL, and waits. The browser picks one candidate, its workspace name
@@ -102,3 +102,25 @@ Finalize retries a refusal at most twice when its envelope explicitly carries
 `retryable: true` (currently only `upload-not-arrived`). Status codes and message
 wording do not authorize a retry. Missing/false markers on other 4xx refusals
 preserve the server verdict without a replacement client failure report.
+
+
+## Automated npm release
+
+[Publish yolostart](../../.github/workflows/publish-yolostart.yml) wakes on a
+main-branch version bump and on successful same-repository push runs of
+[`yolostart tests`](../../.github/workflows/yolostart-tests.yml). The second trigger
+lets a test fix release an earlier failed bump without changing the version again.
+An existing registry version is a no-op; only a 404 means it is unpublished.
+Manual runs are main-only and default to `dry_run: true`.
+
+The workflow pins Go 1.27.1, compiles Linux/macOS amd64/arm64, typechecks tests,
+and packs once. It checks known credential shapes in the exact tarball and all
+four decompressed binaries, validates their checksums, and clean-installs the
+same tarball offline to run `--version` and `--help`. This heuristic scan is not
+proof that all secrets are absent. The publisher rechecks the tarball digest and
+uses the repository's `libnpmpublish`/`forceAuth` approach, with public access for
+unscoped `yolostart`. It never repacks or invokes publish lifecycle scripts.
+
+The operator must provision repository secret `NPM_TOKEN` with write access to
+`yolostart`; missing credentials fail with `ENEEDAUTH`. No token is available to
+the build/test/scan steps. Writing these workflows does not publish a release.
