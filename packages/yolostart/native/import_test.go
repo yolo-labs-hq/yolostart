@@ -42,6 +42,9 @@ func TestImportWorkflow(t *testing.T) {
 			var times []time.Time
 			var server *httptest.Server
 			server = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if !strictJSONBody(w, r) {
+					return
+				}
 				w.Header().Set("Content-Type", "application/json")
 				if r.URL.Path == "/put" {
 					if r.Header.Get("Authorization") != "" || r.Header.Get("User-Agent") != "" || r.Header.Get("Accept-Encoding") != "" {
@@ -250,5 +253,80 @@ func TestFinalizeRetryMarker(t *testing.T) {
 				t.Fatal(calls, tc.want)
 			}
 		})
+	}
+}
+
+// Match express.json({strict:true}): JSON scalars (including null) fail
+// before the route handler, while an absent body and objects/arrays pass.
+func strictJSONBody(w http.ResponseWriter, r *http.Request) bool {
+	if r.Header.Get("Content-Type") != "application/json" {
+		return true
+	}
+	raw, err := io.ReadAll(r.Body)
+	r.Body = io.NopCloser(bytes.NewReader(raw))
+	trimmed := bytes.TrimSpace(raw)
+	if err != nil || (len(trimmed) > 0 && (!json.Valid(trimmed) || (trimmed[0] != '{' && trimmed[0] != '['))) {
+		w.Header().Set("Content-Type", "text/html")
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Fprint(w, "<!DOCTYPE html><title>Bad Request</title>")
+		return false
+	}
+	return true
+}
+
+func TestImportRequestBodies(t *testing.T) {
+	for _, tc := range []struct {
+		name, method string
+		body         any
+	}{
+		{"bodyless poll", "GET", nil},
+		{"bodyless post", "POST", nil},
+		{"JSON post", "POST", map[string]string{"name": "fixture"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			calls := 0
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if !strictJSONBody(w, r) {
+					return
+				}
+				calls++
+				raw, _ := io.ReadAll(r.Body)
+				if r.Method != tc.method || r.Header.Get("Authorization") != "Bearer fixture" {
+					t.Error("request method/auth changed")
+				}
+				if tc.body == nil {
+					if len(raw) != 0 || r.ContentLength != 0 || r.Header.Get("Content-Type") != "" {
+						t.Errorf("bodyless request sent %q, length %d, type %q", raw, r.ContentLength, r.Header.Get("Content-Type"))
+					}
+				} else if string(raw) != `{"name":"fixture"}` || r.Header.Get("Content-Type") != "application/json" {
+					t.Errorf("JSON request changed: %s", raw)
+				}
+				if calls == 1 {
+					w.WriteHeader(503)
+					return
+				}
+				fmt.Fprint(w, `{"status":"approved"}`)
+			}))
+			defer server.Close()
+			d := newImport(io.Discard, "fixture")
+			d.base = server.URL
+			d.sleep = func(ctx context.Context, _ time.Duration) error { return ctx.Err() }
+			var result importSession
+			if err := d.request(context.Background(), tc.method, "/session", tc.body, &result, true); err != nil {
+				t.Fatal(err)
+			}
+			if calls != 2 || result.Status != "approved" {
+				t.Fatalf("retry/response failed: %d %+v", calls, result)
+			}
+		})
+	}
+	// Pin the fixture boundary that the original integration tests omitted.
+	for _, raw := range []string{"null", "true", "42", `"scalar"`} {
+		r := httptest.NewRequest("GET", "/", strings.NewReader(raw))
+		r.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		if strictJSONBody(w, r) || w.Code != 400 {
+			t.Errorf("strict fixture admitted %s", raw)
+		}
 	}
 }

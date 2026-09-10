@@ -76,17 +76,27 @@ func newImport(w io.Writer, token string) *importDriver {
 	}
 }
 func (d *importDriver) request(ctx context.Context, method, route string, body, out any, retry bool) error {
-	data, e := json.Marshal(body)
-	if e != nil {
-		return e
+	var data []byte
+	if body != nil {
+		var err error
+		data, err = json.Marshal(body)
+		if err != nil {
+			return err
+		}
 	}
 	for attempt := 0; ; attempt++ {
-		req, e := http.NewRequestWithContext(ctx, method, d.base+route, bytes.NewReader(data))
+		var reader io.Reader
+		if body != nil {
+			reader = bytes.NewReader(data)
+		}
+		req, e := http.NewRequestWithContext(ctx, method, d.base+route, reader)
 		if e != nil {
 			return errors.New("invalid import API request")
 		}
 		req.Header.Set("Authorization", "Bearer "+d.token)
-		req.Header.Set("Content-Type", "application/json")
+		if body != nil {
+			req.Header.Set("Content-Type", "application/json")
+		}
 		res, e := d.client.Do(req)
 		transient := e != nil
 		var result error
