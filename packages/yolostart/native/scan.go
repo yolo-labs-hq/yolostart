@@ -26,6 +26,7 @@ type Resolution struct {
 	Candidates []Candidate
 }
 type GitInfo struct {
+	Unborn          bool    `json:"unborn"`
 	Remote          *string `json:"remote"`
 	Branch          *string `json:"branch"`
 	LastCommitAt    *string `json:"lastCommitAt"`
@@ -368,7 +369,7 @@ func BuildManifest(root, scanRoot string, isRepo bool) (Manifest, []string, erro
 	m := Manifest{Kind: "adopt-dir", Name: filepath.Base(root), RelPath: filepath.ToSlash(rel), Tree: []TreeEntry{}, Excluded: Excluded{Sensitive: []string{}, Oversize: []string{}, Skipped: []string{}}}
 	if isRepo {
 		m.Kind = "repo"
-		m.Git = &GitInfo{Remote: safeRemote(git(root, "remote", "get-url", "origin")), Branch: nullable(git(root, "symbolic-ref", "--short", "HEAD")), LastCommitAt: nullable(git(root, "log", "-1", "--format=%cI")), Dirty: git(root, "status", "--porcelain", "--untracked-files=normal") != ""}
+		m.Git = &GitInfo{Unborn: git(root, "rev-parse", "--verify", "HEAD") == "", Remote: safeRemote(git(root, "remote", "get-url", "origin")), Branch: nullable(git(root, "symbolic-ref", "--short", "HEAD")), LastCommitAt: nullable(git(root, "log", "-1", "--format=%cI")), Dirty: git(root, "status", "--porcelain", "--untracked-files=normal") != ""}
 	}
 	if m.Git != nil {
 		size, available, err := historySize(root)
