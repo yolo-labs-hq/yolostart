@@ -25,8 +25,9 @@ const ExpandedLimit int64 = 1 << 30
 var errFilesChanged = errors.New("files changed after scanning; re-run for fresh browser approval")
 
 type fingerprint struct {
-	sum  [32]byte
-	mode os.FileMode
+	sum   [32]byte
+	mode  os.FileMode
+	mtime int64
 }
 type inventory struct {
 	root     string
@@ -37,34 +38,34 @@ type inventory struct {
 
 // OpenRoot keeps reads beneath the captured directory even if a parent is replaced.
 // Lstat also rejects links within the root rather than following them.
-func readLocal(root *os.Root, name string) ([]byte, os.FileMode, error) {
+func readLocal(root *os.Root, name string) ([]byte, os.FileInfo, error) {
 	if !safeArchivePath(name) {
-		return nil, 0, errFilesChanged
+		return nil, nil, errFilesChanged
 	}
 	parts := strings.Split(name, "/")
 	for i := range parts {
 		st, e := root.Lstat(strings.Join(parts[:i+1], "/"))
 		if e != nil || st.Mode()&os.ModeSymlink != 0 {
-			return nil, 0, errFilesChanged
+			return nil, nil, errFilesChanged
 		}
 	}
 	f, e := root.OpenFile(name, os.O_RDONLY|syscall.O_NONBLOCK, 0)
 	if e != nil {
-		return nil, 0, errFilesChanged
+		return nil, nil, errFilesChanged
 	}
 	defer f.Close()
 	st, e := f.Stat()
 	if e != nil || !st.Mode().IsRegular() || st.Size() > 25<<20 {
-		return nil, 0, errFilesChanged
+		return nil, nil, errFilesChanged
 	}
 	data, e := io.ReadAll(io.LimitReader(f, (25<<20)+1))
 	if e != nil || len(data) > 25<<20 {
-		return nil, 0, errFilesChanged
+		return nil, nil, errFilesChanged
 	}
 	if sensitivePath(name) || (strings.HasSuffix(strings.ToLower(name), ".json") && sensitiveJSON(data)) {
-		return nil, 0, errFilesChanged
+		return nil, nil, errFilesChanged
 	}
-	return data, st.Mode(), nil
+	return data, st, nil
 }
 func safeArchivePath(p string) bool {
 	if p == "" || p == "." || p == "[remaining paths]" || path.IsAbs(p) || strings.ContainsAny(p, "\\\x00\r\n") || path.Clean(p) != p {
@@ -100,11 +101,11 @@ func capture(ctx context.Context, root, scanRoot string, repo bool) (inventory, 
 		if e = ctx.Err(); e != nil {
 			return inv, e
 		}
-		data, mode, e := readLocal(handle, p)
+		data, info, e := readLocal(handle, p)
 		if e != nil {
 			return inv, e
 		}
-		inv.files[p] = fingerprint{sha256.Sum256(data), mode}
+		inv.files[p] = fingerprint{sha256.Sum256(data), info.Mode(), info.ModTime().UnixNano()}
 	}
 	return inv, nil
 }
@@ -266,13 +267,30 @@ func pack(ctx context.Context, inv inventory, prefixes []string, includeOverflow
 	gz := gzip.NewWriter(capped)
 	tw := tar.NewWriter(gz)
 	total := 0
+	hasHistory := false
 	for _, p := range inv.paths {
 		if allowed(p) {
 			total++
+			if strings.HasPrefix(p, ".git/") {
+				hasHistory = true
+			}
 		}
 	}
 	if total == 0 {
 		return result, errors.New("approval leaves no files to import")
+	}
+	// Tar creates parents of files, but empty refs/objects directories have no
+	// file entries in an unborn repository. Preserve Git's structural skeleton
+	// whenever approved history is present; these carry no additional files.
+	if inv.manifest.Git != nil && inv.manifest.Git.HistoryIncluded && hasHistory {
+		for _, name := range []string{".git", ".git/objects", ".git/refs", ".git/refs/heads", ".git/refs/tags", ".git/logs"} {
+			if excludedPath(name, prefixes) {
+				continue
+			}
+			if e = tw.WriteHeader(&tar.Header{Name: name, Mode: 0700, Typeflag: tar.TypeDir, Format: tar.FormatPAX}); e != nil {
+				return result, e
+			}
+		}
 	}
 	var historyBytes, expandedBytes int64
 	for _, p := range inv.paths {
@@ -282,11 +300,11 @@ func pack(ctx context.Context, inv inventory, prefixes []string, includeOverflow
 		if !allowed(p) {
 			continue
 		}
-		data, mode, e := readLocal(root, p)
+		data, info, e := readLocal(root, p)
 		if e != nil {
 			return result, e
 		}
-		if inv.files[p] != (fingerprint{sha256.Sum256(data), mode}) {
+		if inv.files[p] != (fingerprint{sha256.Sum256(data), info.Mode(), info.ModTime().UnixNano()}) {
 			return result, errFilesChanged
 		}
 		if strings.HasPrefix(p, ".git/") {
@@ -305,7 +323,7 @@ func pack(ctx context.Context, inv inventory, prefixes []string, includeOverflow
 		if expandedBytes > ExpandedLimit {
 			return result, errors.New("archive expands past 1 GiB; narrow the import")
 		}
-		if e = tw.WriteHeader(&tar.Header{Name: p, Mode: int64(mode.Perm() & 0777), Size: int64(len(data)), Typeflag: tar.TypeReg, Format: tar.FormatPAX}); e != nil {
+		if e = tw.WriteHeader(&tar.Header{Name: p, Mode: int64(info.Mode().Perm() & 0777), ModTime: info.ModTime(), Size: int64(len(data)), Typeflag: tar.TypeReg, Format: tar.FormatPAX}); e != nil {
 			return result, e
 		}
 		if _, e = tw.Write(data); e != nil {

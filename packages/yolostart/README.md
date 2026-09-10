@@ -158,3 +158,12 @@ curl -fsSL https://yolostart.sh/install.sh | \
 
 The example targets must be deployed and configured to accept the sign-in token
 before an import can succeed; overrides do not enable a dark server feature.
+
+Imported Git history includes the empty structural directories Git needs
+(`objects`, `refs/heads`, `refs/tags`, and `logs`), even in an unborn repository
+or one whose references are packed. Import preserves the source index and
+commit state: it does not fabricate an initial commit for an unborn repository.
+Regular-file mtimes are preserved in the archive and checked against the scan
+snapshot. Arbitrary empty project directories are not represented by the file
+manifest. Repeated sections in the sanitized Git config are valid Git syntax;
+credentials and executable config settings remain excluded.

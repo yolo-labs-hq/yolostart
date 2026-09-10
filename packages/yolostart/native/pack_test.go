@@ -10,10 +10,12 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestHistoryCeilingAndSchema(t *testing.T) {
@@ -82,6 +84,9 @@ func unpackTest(t *testing.T, filename string) map[string]string {
 		}
 		if e != nil {
 			t.Fatal(e)
+		}
+		if h.Typeflag == tar.TypeDir {
+			continue
 		}
 		if h.Typeflag != tar.TypeReg {
 			t.Fatal("nonregular entry", h)
@@ -222,5 +227,72 @@ func TestPackedConfigPreservesSSHAccountWithoutPassword(t *testing.T) {
 	data, e := sanitizedConfig(context.Background(), []byte("[remote \"origin\"]\nurl=ssh://git:password@github.com/org/repo.git\n"), t.TempDir())
 	if e != nil || !strings.Contains(string(data), "ssh://git@github.com/org/repo.git") || strings.Contains(string(data), "password") {
 		t.Fatal(string(data), e)
+	}
+}
+
+func TestRepositoryStructureRoundTrip(t *testing.T) {
+	for _, state := range []string{"unborn-unstaged", "unborn-staged", "packed-refs"} {
+		t.Run(state, func(t *testing.T) {
+			root := repo(t, t.TempDir(), "unborn", "")
+			put(t, root, "source.txt", "uncommitted source")
+			stamp := time.Unix(1700000000, 123456789)
+			if err := os.Chtimes(filepath.Join(root, "source.txt"), stamp, stamp); err != nil {
+				t.Fatal(err)
+			}
+			gitCmd := func(dir string, args ...string) string {
+				t.Helper()
+				out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput()
+				if err != nil {
+					t.Fatalf("git %v: %v %s", args, err, out)
+				}
+				return string(out)
+			}
+			if state != "unborn-unstaged" {
+				gitCmd(root, "add", "source.txt")
+			}
+			var head string
+			if state == "packed-refs" {
+				gitCmd(root, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.test", "-c", "commit.gpgsign=false", "commit", "-m", "fixture")
+				gitCmd(root, "pack-refs", "--all", "--prune")
+				head = gitCmd(root, "rev-parse", "HEAD")
+			}
+			before := gitCmd(root, "status", "--porcelain=v1")
+			inv, err := capture(context.Background(), root, root, true)
+			if err != nil {
+				t.Fatal(err)
+			}
+			bundle, err := pack(context.Background(), inv, nil, false, t.TempDir(), nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			dest := t.TempDir()
+			if out, err := exec.Command("tar", "-xzf", bundle.filename, "-C", dest).CombinedOutput(); err != nil {
+				t.Fatalf("extract: %v %s", err, out)
+			}
+			if got := gitCmd(dest, "rev-parse", "--is-inside-work-tree"); got != "true\n" {
+				t.Fatal(got)
+			}
+			if got := gitCmd(dest, "status", "--porcelain=v1"); got != before {
+				t.Fatalf("index/worktree changed: %q != %q", got, before)
+			}
+			gitCmd(dest, "fsck", "--full")
+			if head != "" {
+				if got := gitCmd(dest, "rev-parse", "HEAD"); got != head {
+					t.Fatal("commit changed", got, head)
+				}
+			} else if err := exec.Command("git", "-C", dest, "rev-parse", "--verify", "HEAD").Run(); err == nil {
+				t.Fatal("import fabricated a commit")
+			}
+			for _, name := range []string{"objects", "refs/heads", "refs/tags", "logs"} {
+				info, err := os.Stat(filepath.Join(dest, ".git", name))
+				if err != nil || !info.IsDir() {
+					t.Fatalf("missing git directory %s: %v", name, err)
+				}
+			}
+			info, err := os.Stat(filepath.Join(dest, "source.txt"))
+			if err != nil || !info.ModTime().Equal(stamp) {
+				t.Fatalf("mtime lost: %v %v", info, err)
+			}
+		})
 	}
 }
