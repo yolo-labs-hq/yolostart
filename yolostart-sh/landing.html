@@ -28,11 +28,15 @@
     .command-row.alt { margin-top: 10px; background: #18211a; border-color: #33472f; }
     .command-row.alt .command { font-size: 15px; }
     .alt-label { font-size: 13px; margin: 30px 0 0; color: #b4c1b7; }
-    /* Deliberately quiet: the tool works today, so the list is for people who
-       want to hear what comes next — not the reason to be on this page. */
-    .waitlist { margin-top: 36px; border-top: 1px solid #334237; padding-top: 22px; }
-    .waitlist h2 { font-size: 14px; font-weight: 600; margin: 0 0 6px; color: #e7eee8; }
+    /* Clearly set apart from the install commands — its own panel, well below
+       them. Still not the primary CTA: the page is about running the tool. But
+       closed beta is something a visitor needs to know BEFORE they wonder why
+       sign-in did not let them in, so it gets a real container rather than a
+       footnote. */
+    .waitlist { margin-top: 56px; border: 1px solid #3c4f41; border-radius: 8px; background: #151d17; padding: 24px 22px; }
+    .waitlist h2 { font-size: 15px; font-weight: 600; margin: 0 0 8px; color: #e7eee8; }
     .waitlist p { font-size: 13px; margin: 0 0 14px; }
+    .beta-tag { display: inline-block; margin-bottom: 12px; padding: 3px 9px; border: 1px solid #68784c; border-radius: 999px; background: #1e2618; color: #cfe0a8; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; }
     .waitlist form { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
     .waitlist input { flex: 1 1 260px; min-width: 0; padding: 10px 12px; border: 1px solid #405945; border-radius: 5px; background: #161f18; color: #e7eee8; font: inherit; font-size: 14px; }
     .waitlist input:focus-visible { outline: 2px solid #a3ecab; outline-offset: 2px; }
@@ -70,12 +74,13 @@
   </div>
   <p class="hint">A small wrapper that downloads this same native binary and checks it, so both routes run identical code. The shell installer needs no Node at all.</p>
   <section class="waitlist" aria-labelledby="waitlist-heading">
-    <h2 id="waitlist-heading">Hear what lands next</h2>
-    <p>yolostart works today. If you'd like the occasional note about what we ship next, leave an address.</p>
+    <span class="beta-tag">Closed beta</span>
+    <h2 id="waitlist-heading">YOLO Studio is in closed beta</h2>
+    <p>yolostart itself is ready — but the workspace it imports into needs an account, and accounts are invite-only for now. Join the list to be eligible for an invite code.</p>
     <form id="waitlist-form" novalidate>
       <input id="waitlist-email" type="email" name="email" inputmode="email" autocomplete="email"
              placeholder="you@example.com" aria-label="Email address" required>
-      <button type="submit">Keep me posted</button>
+      <button type="submit">Request an invite</button>
     </form>
     <p class="note" id="waitlist-note" role="status" aria-live="polite"></p>
   </section>
@@ -152,7 +157,9 @@
         });
         const data = await response.json().catch(() => ({}));
         if (response.ok && data.ok) {
-          note.textContent = data.already ? 'You are already on the list.' : 'You are on the list.';
+          note.textContent = data.already
+            ? 'You are already on the list — we will send an invite code when one frees up.'
+            : 'You are on the list. We will send an invite code when one frees up.';
           form.hidden = true;
         } else {
           note.textContent = data.error || 'Could not add you just now. Try again shortly.';
