@@ -28,6 +28,19 @@
     .command-row.alt { margin-top: 10px; background: #18211a; border-color: #33472f; }
     .command-row.alt .command { font-size: 15px; }
     .alt-label { font-size: 13px; margin: 30px 0 0; color: #b4c1b7; }
+    /* Deliberately quiet: the tool works today, so the list is for people who
+       want to hear what comes next — not the reason to be on this page. */
+    .waitlist { margin-top: 36px; border-top: 1px solid #334237; padding-top: 22px; }
+    .waitlist h2 { font-size: 14px; font-weight: 600; margin: 0 0 6px; color: #e7eee8; }
+    .waitlist p { font-size: 13px; margin: 0 0 14px; }
+    .waitlist form { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .waitlist input { flex: 1 1 260px; min-width: 0; padding: 10px 12px; border: 1px solid #405945; border-radius: 5px; background: #161f18; color: #e7eee8; font: inherit; font-size: 14px; }
+    .waitlist input:focus-visible { outline: 2px solid #a3ecab; outline-offset: 2px; }
+    .waitlist button { flex-shrink: 0; padding: 10px 16px; border: 1px solid #68916e; border-radius: 5px; background: #263e2c; color: #c4f6ca; font: inherit; font-size: 13px; cursor: pointer; }
+    .waitlist button:hover:not(:disabled) { background: #33523b; }
+    .waitlist button:disabled { opacity: 0.6; cursor: default; }
+    .waitlist .note { font-size: 12px; margin: 10px 0 0; min-height: 1.4em; }
+    .waitlist .note.bad { color: #f2b8b5; }
     .command code { user-select: all; }
     .hint { font-size: 12px; margin: 0 0 22px; }
     .status { border-left: 2px solid #68784c; padding-left: 18px; margin: 28px 0; font-size: 13px; }
@@ -56,6 +69,17 @@
     <button class="copy-command" type="button" aria-live="polite" hidden>Copy</button>
   </div>
   <p class="hint">A small wrapper that downloads this same native binary and checks it, so both routes run identical code. The shell installer needs no Node at all.</p>
+  <section class="waitlist" aria-labelledby="waitlist-heading">
+    <h2 id="waitlist-heading">Hear what lands next</h2>
+    <p>yolostart works today. If you'd like the occasional note about what we ship next, leave an address.</p>
+    <form id="waitlist-form" novalidate>
+      <input id="waitlist-email" type="email" name="email" inputmode="email" autocomplete="email"
+             placeholder="you@example.com" aria-label="Email address" required>
+      <button type="submit">Keep me posted</button>
+    </form>
+    <p class="note" id="waitlist-note" role="status" aria-live="polite"></p>
+  </section>
+
   <details>
     <summary>The octopus you'll meet in your terminal</summary>
     <pre class="banner" tabindex="0" aria-label="YOLO octopus and yolostart terminal banner"><!-- INSTALL_BANNER --></pre>
@@ -103,6 +127,46 @@
     }
   });
   });
+
+  // The list is a nicety, so it fails quietly and never blocks the page. No
+  // redirect, no reload: the form posts to this site's own origin, which
+  // proxies to the canonical waitlist so the browser never talks to it directly.
+  const form = document.getElementById('waitlist-form');
+  const emailInput = document.getElementById('waitlist-email');
+  const note = document.getElementById('waitlist-note');
+  if (form && emailInput && note) {
+    const button = form.querySelector('button');
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const email = emailInput.value.trim();
+      note.classList.remove('bad');
+      if (!email) { note.textContent = 'Enter an email address first.'; note.classList.add('bad'); return; }
+      button.disabled = true;
+      const previous = button.textContent;
+      button.textContent = 'Sending…';
+      try {
+        const response = await fetch('/api/waitlist', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (response.ok && data.ok) {
+          note.textContent = data.already ? 'You are already on the list.' : 'You are on the list.';
+          form.hidden = true;
+        } else {
+          note.textContent = data.error || 'Could not add you just now. Try again shortly.';
+          note.classList.add('bad');
+        }
+      } catch {
+        note.textContent = 'Could not reach the list. Check your connection and try again.';
+        note.classList.add('bad');
+      } finally {
+        button.disabled = false;
+        button.textContent = previous;
+      }
+    });
+  }
 })();
 </script>
 </body>

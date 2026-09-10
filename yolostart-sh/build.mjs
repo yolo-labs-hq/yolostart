@@ -68,6 +68,39 @@ export default { fetch(request, env) {
       return new Response(result.body, {status:result.status, headers});
     });
   }
+  if (url.pathname === '/api/waitlist') {
+    const json = (body, status) => new Response(JSON.stringify(body), {status, headers:{'Content-Type':'application/json','Cache-Control':'no-store'}});
+    if (request.method !== 'POST') return json({error:'Method not allowed'}, 405);
+    return (async () => {
+      let email = '';
+      try {
+        const body = await request.json();
+        if (body && typeof body.email === 'string') email = body.email.trim();
+      } catch { email = ''; }
+      // Cheap shape guard only; the upstream validates properly. Deliberately
+      // regex-free — this source is emitted through a template literal, where a
+      // stray backslash escape silently changes the pattern.
+      const at = email.indexOf('@'), dot = email.lastIndexOf('.');
+      const shaped = at > 0 && dot > at + 1 && dot < email.length - 1
+        && email.length <= 254 && !email.includes(' ');
+      if (!shaped) return json({error:'Enter a valid email address.'}, 400);
+      try {
+        // product and source are fixed HERE, never read from the request: a
+        // browser must not be able to write itself into another product's list.
+        const upstream = await fetch('https://waitlist.yololabs.ai/api/waitlist', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({email, product:'yolo-studio', source:'yolostart'}),
+        });
+        if (upstream.status === 409) return json({ok:true, already:true}, 200);
+        if (!upstream.ok) return json({error:'Could not reach the list just now. Try again shortly.'}, 502);
+        return json({ok:true}, 200);
+      } catch {
+        // Never surface the upstream body or error: it is not ours to leak.
+        return json({error:'Could not reach the list just now. Try again shortly.'}, 502);
+      }
+    })();
+  }
   if (url.pathname !== '/' && url.pathname !== '/install.sh') return new Response('Not found', {status:404});
   const isBrowser = request.headers.get('sec-fetch-dest') === 'document'
     || (request.headers.get('accept') ?? '').includes('text/html');
