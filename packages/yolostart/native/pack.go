@@ -158,8 +158,29 @@ func sanitizedConfig(ctx context.Context, data []byte, dir string) ([]byte, erro
 	if e != nil {
 		return nil, errors.New("cannot parse .git/config safely")
 	}
-	var out bytes.Buffer
-	fmt.Fprintln(&out, "[core]\n\trepositoryformatversion = 0\n\tbare = false")
+	type configEntry struct{ field, value string }
+	var headers []string
+	sections := map[string][]configEntry{}
+	add := func(header, field, value string) {
+		if _, exists := sections[header]; !exists {
+			headers = append(headers, header)
+		}
+		// Core settings are scalar: retain the effective last value, replacing
+		// defaults rather than emitting a second repositoryformatversion key.
+		if header == "core" {
+			for i, entry := range sections[header] {
+				if entry.field == field {
+					sections[header][i].value = value
+					return
+				}
+			}
+		}
+		// Remote fetch/URL and branch merge can be multi-valued. Preserve their
+		// original ordering and multiplicity, even across repeated sections.
+		sections[header] = append(sections[header], configEntry{field, value})
+	}
+	add("core", "repositoryformatversion", "0")
+	add("core", "bare", "false")
 	for _, record := range bytes.Split(output, []byte{0}) {
 		if len(record) == 0 {
 			continue
@@ -179,7 +200,7 @@ func sanitizedConfig(ctx context.Context, data []byte, dir string) ([]byte, erro
 				if value != "0" && value != "1" && value != "true" && value != "false" {
 					return nil, errors.New("unsupported portable Git configuration")
 				}
-				fmt.Fprintf(&out, "[%s]\n\t%s = %s\n", section, field, value)
+				add(section, field, value)
 			}
 			continue
 		}
@@ -195,12 +216,19 @@ func sanitizedConfig(ctx context.Context, data []byte, dir string) ([]byte, erro
 			if len(strconv.Quote(*clean)) > 2048 {
 				return nil, errors.New("Git remote URL exceeds import limit")
 			}
-			fmt.Fprintf(&out, "[remote %s]\n\t%s = %s\n", strconv.Quote(subsection), field, strconv.Quote(*clean))
+			add("remote "+strconv.Quote(subsection), field, strconv.Quote(*clean))
 		} else if section == "remote" && field == "fetch" || section == "branch" && (field == "remote" || field == "merge") {
 			if len(strconv.Quote(value)) > 2048 || strings.ContainsAny(value, "\x00\r\n") {
 				return nil, errors.New("invalid Git tracking configuration")
 			}
-			fmt.Fprintf(&out, "[%s %s]\n\t%s = %s\n", section, strconv.Quote(subsection), field, strconv.Quote(value))
+			add(section+" "+strconv.Quote(subsection), field, strconv.Quote(value))
+		}
+	}
+	var out bytes.Buffer
+	for _, header := range headers {
+		fmt.Fprintf(&out, "[%s]\n", header)
+		for _, entry := range sections[header] {
+			fmt.Fprintf(&out, "\t%s = %s\n", entry.field, entry.value)
 		}
 	}
 	if out.Len() > 64<<10 {

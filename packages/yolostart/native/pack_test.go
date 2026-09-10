@@ -296,3 +296,77 @@ func TestRepositoryStructureRoundTrip(t *testing.T) {
 		})
 	}
 }
+
+func TestSanitizedConfigGroupsSectionsAndIsIdempotent(t *testing.T) {
+	input := `[core]
+ repositoryformatversion = 0
+ filemode = false
+[remote "origin"]
+ url = https://user:SECRET@github.com/org/repo
+ fetch = +refs/heads/*:refs/remotes/origin/*
+[core]
+ repositoryformatversion = 0
+ filemode = true
+ logallrefupdates = true
+ bare = true
+[branch "main"]
+ remote = origin
+ merge = refs/heads/main
+[remote "origin"]
+ fetch = +refs/tags/*:refs/tags/*
+ fetch = +refs/heads/*:refs/remotes/origin/*
+[branch "main"]
+ merge = refs/heads/other
+[credential]
+ helper = !echo SECRET
+[include]
+ path = /private/config
+`
+	want := map[string][]string{
+		"core.repositoryformatversion": {"0"}, "core.bare": {"false"},
+		"core.filemode": {"true"}, "core.logallrefupdates": {"true"},
+		"remote.origin.url":   {"https://github.com/org/repo"},
+		"remote.origin.fetch": {"+refs/heads/*:refs/remotes/origin/*", "+refs/tags/*:refs/tags/*", "+refs/heads/*:refs/remotes/origin/*"},
+		"branch.main.remote":  {"origin"}, "branch.main.merge": {"refs/heads/main", "refs/heads/other"},
+	}
+	result, err := sanitizedConfig(context.Background(), []byte(input), t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, header := range []string{"[core]", `[remote "origin"]`, `[branch "main"]`} {
+		if strings.Count(string(result), header) != 1 {
+			t.Fatalf("section repeated/missing %s: %s", header, result)
+		}
+	}
+	if strings.Contains(string(result), "SECRET") || strings.Contains(string(result), "include") {
+		t.Fatal("unsafe settings survived")
+	}
+	file := filepath.Join(t.TempDir(), "config")
+	if err := os.WriteFile(file, result, 0600); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := exec.Command("git", "config", "--file", file, "--no-includes", "--null", "--list").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string][]string{}
+	for _, record := range bytes.Split(raw, []byte{0}) {
+		if len(record) == 0 {
+			continue
+		}
+		key, value, _ := strings.Cut(string(record), "\n")
+		got[key] = append(got[key], value)
+	}
+	a, _ := json.Marshal(got)
+	b, _ := json.Marshal(want)
+	if !bytes.Equal(a, b) {
+		t.Fatalf("Git-parsed semantics changed:\ngot %s\nwant %s", a, b)
+	}
+	for i := 0; i < 3; i++ {
+		again, err := sanitizedConfig(context.Background(), result, t.TempDir())
+		if err != nil || !bytes.Equal(again, result) {
+			t.Fatalf("sanitization not idempotent: %v\n%s", err, again)
+		}
+		result = again
+	}
+}

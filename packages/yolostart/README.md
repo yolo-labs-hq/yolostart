@@ -165,8 +165,9 @@ or one whose references are packed. Import preserves the source index and
 commit state: it does not fabricate an initial commit for an unborn repository.
 Regular-file mtimes are preserved in the archive and checked against the scan
 snapshot. Arbitrary empty project directories are not represented by the file
-manifest. Repeated sections in the sanitized Git config are valid Git syntax;
-credentials and executable config settings remain excluded.
+manifest. Sanitized Git config groups keys into one block per section, keeps effective
+scalar core settings and preserves multi-valued remote/branch settings.
+Credentials and executable config settings remain excluded.
 
 Git candidates explicitly report `git.unborn`. A single selected unborn repo
 prints an advisory warning to stderr after scanning, before session creation
