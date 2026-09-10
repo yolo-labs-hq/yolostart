@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="Start with your local project. yolostart is a native CLI for YOLO Studio, with no Node or npm required.">
-  <title>yolostart — local work, cloud workspace</title>
+  <title>yolostart: local work, cloud workspace</title>
   <link rel="icon" href="/favicon.ico" sizes="32x32">
   <link rel="icon" type="image/svg+xml" href="<!-- ICON_SVG -->">
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
@@ -28,7 +28,7 @@
     .command-row.alt { margin-top: 10px; background: #18211a; border-color: #33472f; }
     .command-row.alt .command { font-size: 15px; }
     .alt-label { font-size: 13px; margin: 30px 0 0; color: #b4c1b7; }
-    /* Clearly set apart from the install commands — its own panel, well below
+    /* Clearly set apart from the install commands: its own panel, well below
        them. Still not the primary CTA: the page is about running the tool. But
        closed beta is something a visitor needs to know BEFORE they wonder why
        sign-in did not let them in, so it gets a real container rather than a
@@ -59,7 +59,7 @@
 <main>
   <div class="eyebrow">YOLO STUDIO / EARLY ACCESS</div>
   <h1>Local work.<br>Cloud workspace.</h1>
-  <p>yolostart is a native command-line tool for bringing a local project into a YOLO Studio workspace. It reads your project on your machine, opens browser sign-in, and asks you to approve what comes along before anything uploads — with no Node or npm installation required. It runs on macOS and Linux, on Intel and ARM.</p>
+  <p>yolostart is a native command-line tool for bringing a local project into a YOLO Studio workspace. It reads your project on your machine, opens browser sign-in, and asks you to approve what comes along before anything uploads. No Node or npm installation required. It runs on macOS and Linux, on Intel and ARM.</p>
   <div class="command-row">
     <pre class="command" tabindex="0" aria-label="Installation command"><code id="install-command">curl -fsSL https://yolostart.sh | sh</code></pre>
     <button class="copy-command" type="button" aria-live="polite" hidden>Copy</button>
@@ -76,7 +76,7 @@
   <section class="waitlist" aria-labelledby="waitlist-heading">
     <span class="beta-tag">Closed beta</span>
     <h2 id="waitlist-heading">YOLO Studio is in closed beta</h2>
-    <p>yolostart itself is ready — but the workspace it imports into needs an account, and accounts are invite-only for now. Join the list to be eligible for an invite code.</p>
+    <p>yolostart itself is ready, but the workspace it imports into needs an account, and accounts are invite-only for now. Join the list to be eligible for an invite code.</p>
     <form id="waitlist-form" novalidate>
       <input id="waitlist-email" type="email" name="email" inputmode="email" autocomplete="email"
              placeholder="you@example.com" aria-label="Email address" required>
@@ -98,7 +98,7 @@
 <script>
 (() => {
   // Wire every command block. Each row owns its button and its code element,
-  // and borrows the .hint that follows it for the clipboard-denied fallback —
+  // and borrows the .hint that follows it for the clipboard-denied fallback,
   // so a copy failure explains itself next to the command it happened to,
   // rather than under a different one.
   document.querySelectorAll('.command-row').forEach((row) => {
@@ -158,7 +158,7 @@
         const data = await response.json().catch(() => ({}));
         if (response.ok && data.ok) {
           note.textContent = data.already
-            ? 'You are already on the list — we will send an invite code when one frees up.'
+            ? 'You are already on the list. We will send an invite code when one frees up.'
             : 'You are on the list. We will send an invite code when one frees up.';
           form.hidden = true;
         } else {
