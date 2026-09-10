@@ -40,12 +40,20 @@ async function fixture(t: TestContext, binary = raw) {
     return fetch(base + new URL(String(input)).pathname, init);
   };
   t.after(async () => { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); await rm(home, {recursive:true,force:true}); });
-  return {home, compressed, manifest, responses, requests, base, options: {platform:'linux', arch:'x64', env:{XDG_CACHE_HOME:home}, fetchImpl}};
+  return {home, compressed, manifest, responses, requests, base, options: {pinnedRelease:manifest,platform:'linux', arch:'x64', env:{XDG_CACHE_HOME:home}, fetchImpl}};
 }
-test('latest resolves independently, fetches one platform and forwards arguments/exit status', async t => {
+test('default pin fetches only one binary and forwards arguments/exit status', async t => {
   const f = await fixture(t);
   assert.equal(await launch(['--scan','/a path'], f.options), 42);
-  assert.deepEqual(f.requests, [RELEASE_BASE+'latest.txt',RELEASE_BASE+version+'/manifest.json',RELEASE_BASE+version+'/yolostart-linux-amd64.gz']);
+  assert.deepEqual(f.requests, [RELEASE_BASE+version+'/yolostart-linux-amd64.gz']);
+});
+test('explicit latest override fetches metadata and labels verification failures by trust mode',async t=>{
+  const f=await fixture(t);
+  f.responses.set(`/releases/${version}/yolostart-linux-amd64.gz`,{body:Buffer.from('bad')});
+  await assert.rejects(resolveExecutable(f.options),/pinned 42.1.2 \(embedded digests\).*checksum mismatch/);
+  await assert.rejects(resolveExecutable({...f.options,env:{XDG_CACHE_HOME:f.home,YOLOSTART_VERSION:'latest'}}),/override "latest" \(fetched manifest\).*checksum mismatch/);
+  assert.ok(f.requests.includes(RELEASE_BASE+'latest.txt'));
+  assert.ok(f.requests.includes(RELEASE_BASE+version+'/manifest.json'));
 });
 test('pins skip latest; platform mapping and HOME cache fallback work', async t => {
   const f = await fixture(t);
@@ -73,9 +81,10 @@ test('valid cache avoids binary download; truncated executable and gzip are repa
   await writeFile(executable+'.gz','truncated');
   await resolveExecutable(f.options);
   assert.equal(f.requests.filter(x=>x.endsWith('.gz')).length,2);
+  f.options.env = {...f.options.env, ...{YOLOSTART_VERSION:version}};
   assert.equal((await stat(executable)).mode & 0o777,0o700);
   f.manifest.files['linux-amd64'].executableSha256 = '0'.repeat(64);
-  await assert.rejects(resolveExecutable(f.options), /checksum mismatch/); // Fresh manifest also governs hits.
+  await assert.rejects(resolveExecutable(f.options), /checksum mismatch/); // Override mode checks its fresh manifest even on a cache hit.
 });
 test('concurrent runs and an interrupted temporary write cannot expose truncated executable bytes', async t => {
   const f = await fixture(t), dir = path.join(f.home,'yolostart',version);
@@ -113,7 +122,7 @@ test('SIGINT/SIGTERM reach the child and propagate terminal exit status', async 
   for (const [signal,code] of [['SIGINT',130],['SIGTERM',143]] as const) await t.test(signal,async t => {
     const f = await fixture(t,Buffer.from('#!/bin/sh\ntrap "exit 130" INT\ntrap "exit 143" TERM\necho READY\nwhile :; do sleep 0.1; done\n'));
     const script = `import {launch} from ${JSON.stringify(new URL('../dist/launcher.js',import.meta.url).href)};
-      process.exitCode=await launch([], {env:{XDG_CACHE_HOME:${JSON.stringify(f.home)}},fetchImpl:(url,init)=>fetch(${JSON.stringify(f.base)}+new URL(url).pathname,init)});`;
+      process.exitCode=await launch([], {pinnedRelease:${JSON.stringify(f.manifest)},env:{XDG_CACHE_HOME:${JSON.stringify(f.home)}},fetchImpl:(url,init)=>fetch(${JSON.stringify(f.base)}+new URL(url).pathname,init)});`;
     const child = spawn(process.execPath,['--input-type=module','-e',script],{stdio:['ignore','pipe','pipe']});
     t.after(()=>{child.kill('SIGKILL');});
     const completion = once(child,'close');
@@ -130,4 +139,21 @@ test('built bootstrap has no interactive APIs or retired scanner', async () => {
   const files = (await readdir(dist)).filter(x=>/\.(?:m?js)$/.test(x)).sort();
   assert.deepEqual(files,['cli.js','launcher.js','release-url.mjs']);
   for (const file of files) assert.doesNotMatch(await readFile(new URL(file,dist),'utf8'),/readline|createInterface|\/dev\/tty|\b(?:inquirer|enquirer|prompts)\b|\bprompt\s*\(|process\.stdin|setRawMode|isTTY/);
+});
+
+test('built package uses its embedded digests, ignores remote metadata, and reuses its cache offline',async t=>{
+  const {version: ownVersion}=JSON.parse(await readFile(new URL('../package.json',import.meta.url),'utf8'));
+  const compressed=await readFile(new URL(`../dist/native/${ownVersion}/yolostart-linux-amd64.gz`,import.meta.url));
+  const f=await fixture(t);
+  const asset=`/releases/${ownVersion}/yolostart-linux-amd64.gz`;
+  f.responses.set(asset,{body:compressed});
+  const {pinnedRelease,...options}=f.options;
+  const built=await import(new URL('../dist/launcher.js',import.meta.url).href);
+  const executable=await built.resolveExecutable(options);
+  assert.deepEqual(f.requests,[new URL(asset,RELEASE_BASE).href]);
+  assert.equal(await built.resolveExecutable({...options,fetchImpl:()=>{throw Error('offline');}}),executable);
+  // A server cannot replace both payload and manifest to override the embedded pin.
+  await rm(executable+'.gz');
+  f.responses.set(asset,{body:gzipSync(Buffer.from('server replacement'))});
+  await assert.rejects(built.resolveExecutable(options),/pinned .* \(embedded digests\).*checksum mismatch/);
 });

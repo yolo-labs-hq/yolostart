@@ -109,17 +109,19 @@ the downloads workflow.
 
 Favicons are embedded into the Worker at build time from `icons/`: the emerald octopus SVG from `assets/octopus-emerald.svg`, and the existing webapp 32px/180px brand PNGs (32px wrapped as ICO). Icon routes cache for one day; HTML remains uncached. No external icon requests or installer changes.
 
-## Independent npm bootstrap
+## Thin npm bootstrap with a shared release version
 
-`packages/yolostart/native/version.json` controls native releases and `latest.txt`.
-`packages/yolostart/package.json` controls the thin npm bootstrap's separate 1.x
-version line. Build native releases with `npm run pack:native`; do not use npm pack
-as the native archive builder. New release archives retain legacy internal paths
-for restoration but identify as private `yolostart-native-release`, not an installable
-npm package. Historical archives remain byte-identical.
+`packages/yolostart/package.json` controls the native binaries, npm bootstrap,
+release paths and `latest.txt`. Build native archives with `npm run pack:native`;
+do not use npm pack as the native archive builder. New release archives retain
+legacy internal paths for restoration but identify as private
+`yolostart-native-release`, not an installable npm package. Historical archives
+remain byte-identical.
 
 The unversioned `/yolostart.tgz` alias serves the separately packed thin bootstrap
-from `/bootstrap/yolostart-<bootstrap-version>.tgz`, with no-store on the alias.
-That package downloads only the running platform's native bytes at runtime, using
-the same release base and redirect policy as the shell/Host restoration path.
-A native release does not require an npm version bump or npm publication.
+from `/bootstrap/yolostart-<version>.tgz`, with no-store on the alias. The bootstrap
+embeds digests verified against all four built native artifacts, then downloads
+only its own version's current-platform executable on first run. Default cache
+hits work offline and never use fetched metadata as a trust anchor.
+`YOLOSTART_VERSION` explicitly selects a different mode using a fetched manifest;
+only an explicit `latest` override resolves `latest.txt`.

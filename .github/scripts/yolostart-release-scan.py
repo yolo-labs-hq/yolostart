@@ -57,6 +57,18 @@ def inspect(filename, expected_version, wrapper=False):
             raise ValueError('Bootstrap must contain only the small explicit file allowlist')
         if package.get('dependencies') or any(k in package.get('scripts', {}) for k in ('preinstall', 'install', 'postinstall')):
             raise ValueError('Bootstrap must install offline without dependencies or lifecycle downloads')
+        # Refuse stale/unbuilt JS even if package.json was bumped independently.
+        pins = re.findall(rb'^const PINNED_RELEASE = (.+);$', entries['package/dist/launcher.js'], re.M)
+        if len(pins) != 1:
+            raise ValueError('Bootstrap has no unique embedded native pin')
+        pin = json.loads(pins[0])
+        if pin.get('version') != expected_version or set(pin.get('files', {})) != TARGETS:
+            raise ValueError('Bootstrap pin must match its package version and all four targets')
+        for target, entry in pin['files'].items():
+            if (entry.get('file') != f'yolostart-{target}.gz'
+                    or not re.fullmatch(r'[a-f0-9]{64}', entry.get('sha256', ''))
+                    or not re.fullmatch(r'[a-f0-9]{64}', entry.get('executableSha256', ''))):
+                raise ValueError('Invalid embedded native digest')
         return hashlib.sha256(Path(filename).read_bytes()).hexdigest()
     prefix = f'package/dist/native/{expected_version}/'
     manifest = json.loads(entries[prefix + 'manifest.json'])

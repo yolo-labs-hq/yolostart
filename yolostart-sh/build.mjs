@@ -24,7 +24,7 @@ const icons = {};
 for (const [path, type] of [['favicon.ico', 'image/x-icon'], ['apple-touch-icon.png', 'image/png']]) {
   icons['/' + path] = {type, bytes: (await readFile(new URL('./icons/' + path, import.meta.url))).toString('base64')};
 }
-const {version} = JSON.parse(await readFile(new URL('../packages/yolostart/native/version.json', import.meta.url), 'utf8'));
+const {version} = JSON.parse(await readFile(new URL('../packages/yolostart/package.json', import.meta.url), 'utf8'));
 const {version: bootstrapVersion} = JSON.parse(await readFile(new URL('../packages/yolostart/package.json', import.meta.url), 'utf8'));
 const bootstrapBuild=spawnSync('npm',['run','build'],{cwd:new URL('../packages/yolostart/',import.meta.url),stdio:'inherit'});
 if(bootstrapBuild.error || bootstrapBuild.status!==0) throw Error('Bootstrap build failed');

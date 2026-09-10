@@ -4,7 +4,7 @@ import {mkdir, mkdtemp, readFile, writeFile, cp, rm} from 'node:fs/promises';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 const root=new URL('../',import.meta.url);
-const {version}=JSON.parse(await readFile(new URL('native/version.json',root),'utf8'));
+const {version}=JSON.parse(await readFile(new URL('package.json',root),'utf8'));
 if (!/^\d+\.\d+\.\d+$/.test(version)) throw Error('Invalid native release version');
 const build=spawnSync(process.execPath,['scripts/build-native.mjs'],{cwd:root,stdio:'inherit'});
 if(build.error || build.status!==0) throw Error('Native build failed');

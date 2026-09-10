@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 const root = fileURLToPath(new URL("../", import.meta.url));
 const { version } = JSON.parse(
-  await readFile(path.join(root, "native", "version.json"), "utf8"),
+  await readFile(path.join(root, "package.json"), "utf8"),
 );
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {

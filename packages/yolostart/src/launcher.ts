@@ -12,7 +12,11 @@ const FALLBACK = "Try: curl -fsSL https://yolostart.sh | sh";
 const digest = (data: Buffer) => createHash("sha256").update(data).digest("hex");
 const versionPattern = /^\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$/;
 type Entry = { file: string; sha256: string; executableSha256: string };
+export type Release = { version: string; files: Record<string, Entry> };
+// Build replaces this sentinel with digests verified against all four native artifacts.
+const PINNED_RELEASE: Release | undefined = undefined;
 export type LaunchOptions = {
+  pinnedRelease?: Release;
   platform?: string; arch?: string; env?: NodeJS.ProcessEnv;
   fetchImpl?: typeof fetch;
 };
@@ -80,19 +84,27 @@ async function atomicWrite(dir: string, filename: string, data: Buffer, mode: nu
   } finally { await rm(temp, { recursive: true, force: true }); }
 }
 export async function resolveExecutable(options: LaunchOptions = {}): Promise<string> {
+  const env = options.env ?? process.env;
+  const pinned = options.pinnedRelease ?? PINNED_RELEASE;
+  const override = env.YOLOSTART_VERSION !== undefined;
+  let mode = override ? `override ${JSON.stringify(env.YOLOSTART_VERSION)} (fetched manifest)`
+    : `pinned ${pinned?.version ?? "unbuilt"} (embedded digests)`;
   try {
     const platform = options.platform ?? process.platform, arch = options.arch ?? process.arch;
     const cpu = arch === "x64" ? "amd64" : arch;
     if (!["linux", "darwin"].includes(platform) || !["amd64", "arm64"].includes(cpu))
       throw Error("yolostart supports macOS/Linux on x64/arm64.");
-    const env = options.env ?? process.env, fetchImpl = options.fetchImpl ?? fetch;
-    let version = env.YOLOSTART_VERSION || "latest";
+    const fetchImpl = options.fetchImpl ?? fetch;
+    let version = override ? env.YOLOSTART_VERSION! : pinned?.version ?? "";
     if (version === "latest") version = (await download(RELEASE_BASE + "latest.txt", 128, fetchImpl)).toString().trim();
     if (!versionPattern.test(version)) throw Error("Invalid YOLOSTART_VERSION or latest release version.");
+    if (override) mode += ` [resolved ${version}]`;
     const target = `${platform}-${cpu}`, filename = `yolostart-${target}`;
-    const manifest = JSON.parse((await download(`${RELEASE_BASE}${version}/manifest.json`, 1024 * 1024, fetchImpl)).toString());
-    const entry: Entry | undefined = manifest.files?.[target];
-    if (manifest.version !== version || !entry || entry.file !== filename + ".gz"
+    const manifest = override
+      ? JSON.parse((await download(`${RELEASE_BASE}${version}/manifest.json`, 1024 * 1024, fetchImpl)).toString())
+      : pinned;
+    const entry: Entry | undefined = manifest?.files?.[target];
+    if (manifest?.version !== version || !entry || entry.file !== filename + ".gz"
       || !/^[a-f0-9]{64}$/.test(entry.sha256) || !/^[a-f0-9]{64}$/.test(entry.executableSha256))
       throw Error("Invalid native release manifest.");
     const cacheHome = env.XDG_CACHE_HOME || path.join(env.HOME || homedir(), ".cache");
@@ -118,7 +130,7 @@ export async function resolveExecutable(options: LaunchOptions = {}): Promise<st
   } catch (error) {
     // Network/filesystem errors can contain URLs or private cache paths.
     const message = error instanceof Error && error.constructor === Error ? error.message : "Could not download or verify the native CLI.";
-    throw Error(`${message} ${FALLBACK}`);
+    throw Error(`${mode}: ${message} ${FALLBACK}`);
   }
 }
 export async function launch(args: string[], options: LaunchOptions = {}): Promise<number> {
