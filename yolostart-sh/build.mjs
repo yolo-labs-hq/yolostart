@@ -11,6 +11,12 @@ if (result.error || result.status !== 0)
     "Native CLI build failed. Build machine requires Go and npm.",
   );
 const script = await readFile(new URL("./install.sh", import.meta.url), "utf8");
+const banner = script.match(/cat <<'BANNER'\n([\s\S]*?)\nBANNER\n/)?.[1];
+if (!banner) throw Error('Installer banner missing');
+const template = await readFile(new URL('./landing.html', import.meta.url), 'utf8');
+if (template.split('<!-- INSTALL_BANNER -->').length !== 2) throw Error('Landing banner slot missing or duplicated');
+const escapeHtml = value => value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+const landing = template.replace('<!-- INSTALL_BANNER -->', () => escapeHtml(banner));
 const {version} = JSON.parse(await readFile(new URL('../packages/yolostart/package.json', import.meta.url), 'utf8'));
 await mkdir(new URL('./dist/',import.meta.url),{recursive:true});
 const staging=await mkdtemp(fileURLToPath(new URL('./dist/release-build-',import.meta.url)));
@@ -35,8 +41,9 @@ try {
 } finally { await rm(staging,{recursive:true,force:true}); }
 await writeFile(
   new URL('./dist/worker.mjs', import.meta.url),
-  `// Generated from install.sh; do not edit.
+  `// Generated from install.sh and landing.html; do not edit.
 const script = ${JSON.stringify(script)};
+const landing = ${JSON.stringify(landing)};
 export default { fetch(request, env) {
   const url = new URL(request.url);
   const noStore = url.pathname === '/yolostart.tgz' || url.pathname === '/releases/latest.txt' || url.pathname === '/releases/index.json';
@@ -50,7 +57,15 @@ export default { fetch(request, env) {
     });
   }
   if (url.pathname !== '/' && url.pathname !== '/install.sh') return new Response('Not found', {status:404});
-  return new Response(script, {headers:{'Content-Type':'text/plain; charset=utf-8','X-Content-Type-Options':'nosniff'}});
+  const isBrowser = request.headers.get('sec-fetch-dest') === 'document'
+    || (request.headers.get('accept') ?? '').includes('text/html');
+  const html = url.pathname === '/' && !url.searchParams.has('raw') && isBrowser;
+  return new Response(html ? landing : script, {headers:{
+    'Content-Type': html ? 'text/html; charset=utf-8' : 'text/plain; charset=utf-8',
+    'Vary': 'Accept, Sec-Fetch-Dest',
+    'Cache-Control': 'no-store',
+    'X-Content-Type-Options': 'nosniff'
+  }});
 } };
 `,
 );
