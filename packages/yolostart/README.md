@@ -1,4 +1,4 @@
-# yolostart 0.3.3
+# yolostart 0.3.4
 
 One native CLI, two entry points:
 
@@ -17,7 +17,7 @@ The custom hostname `yolostart.sh` is live (operator-verified). `YOLOSTART_VERSI
 `npx https://yolostart-sh.yolo.host/releases/0.2.0/yolostart-0.2.0.tgz`.
 After registry publication, `npx yolostart@0.2.0` also works. Git is required for repository discovery and metadata.
 
-## Import flow (0.3.3; server integration pending)
+## Import flow (0.3.4; server integration pending)
 
 Without `--dry-run`, the CLI signs in, scans, creates an approval session, prints
 the browser URL, and waits. The browser picks one candidate, its workspace name
@@ -61,6 +61,11 @@ with overflow aggregated. Per-file ceiling: 25 MiB; include ceiling: 20,000 file
 `.git` directory at or below 25 MiB. Larger histories are omitted and reported
 under `excluded.skipped`; their remote stays in the manifest for server recording.
 Worktree `.git` pointers report zero bytes and `historyIncluded: false`.
+Alternates, linked object directories and external Git object-store environment
+settings also omit history (with `.git` reported as skipped). Local history
+bytes still describe only the local `.git`; working-tree files remain eligible.
+SSH/Git remote usernames are preserved, while passwords and HTTP userinfo are
+removed.
 
 The packer retains the scanned include list and hashes locally. Newly added
 files never join the upload; changed/deleted files, changed modes, symlinks or
@@ -92,8 +97,9 @@ Run `npm run typecheck:test` and `npm test` (wrapper tests plus native Go tests)
 `npm pack` includes the four compressed binaries; consumers need no compiler.
 The host build copies those exact artifacts to `/releases/<version>/` and serves
 `/releases/latest.txt`. Commit the version bump with behavior changes, verify a
-preview, then promote. Keep prior version directories in release assets when
-publishing subsequent versions so pinned shell installs remain available.
+preview, then promote. The host restores all prior versioned packages from the live release index and
+verifies hashes before adding a version; unavailable archives stop the build.
+See [host release retention](../../yolostart-sh/README.md) before deploying.
 
 This native + optional npm architecture supersedes the plan's original
 npm-only bootstrap choice at the operator's request. The plan is left unchanged.

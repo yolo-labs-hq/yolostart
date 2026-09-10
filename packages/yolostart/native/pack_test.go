@@ -217,3 +217,10 @@ func TestPortableConfigMatchesServerAllowlist(t *testing.T) {
 		}
 	}
 }
+
+func TestPackedConfigPreservesSSHAccountWithoutPassword(t *testing.T) {
+	data, e := sanitizedConfig(context.Background(), []byte("[remote \"origin\"]\nurl=ssh://git:password@github.com/org/repo.git\n"), t.TempDir())
+	if e != nil || !strings.Contains(string(data), "ssh://git@github.com/org/repo.git") || strings.Contains(string(data), "password") {
+		t.Fatal(string(data), e)
+	}
+}

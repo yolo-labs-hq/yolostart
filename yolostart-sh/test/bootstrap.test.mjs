@@ -114,3 +114,8 @@ test('npx package alias maps to the versioned tarball without stale caching', as
   assert.equal(response.headers.get('cache-control'),'no-store');
   assert.equal(await response.text(),'package');
 });
+
+test('release inventory is never served from a stale browser cache',async()=>{
+ const response=await worker.fetch(new Request('https://example.test/releases/index.json'),{ASSETS:{fetch:()=>Response.json({schemaVersion:1,releases:[]})}});
+ assert.equal(response.headers.get('cache-control'),'no-store');
+});

@@ -255,3 +255,59 @@ func TestDryRunHasOnlyAuthAndNoInput(t *testing.T) {
 		}
 	}
 }
+
+func TestRemoteUserinfoContract(t *testing.T) {
+	for input, want := range map[string]string{
+		"https://token@host/repo":                            "https://host/repo",
+		"http://user:password@host/repo":                     "http://host/repo",
+		"ssh://git@host/repo":                                "ssh://git@host/repo",
+		"ssh://git:password@host/repo?token=private#private": "ssh://git@host/repo",
+		"git://user@host/repo":                               "git://user@host/repo",
+		"git+ssh://user:password@host/repo":                  "git+ssh://user@host/repo",
+		"ssh+git://user@host/repo":                           "ssh+git://user@host/repo",
+		"ssh://@host/repo":                                   "",
+		"ssh://:password@host/repo":                          "",
+		"git@host:org/repo":                                  "git@host:org/repo",
+		"user:password@host:repo":                            "",
+		"user@token@host:repo":                               "",
+	} {
+		got := safeRemote(input)
+		if (got == nil && want != "") || (got != nil && *got != want) {
+			t.Errorf("remote mismatch for %q", input)
+		}
+	}
+}
+func TestAlternateHistoryIsOmittedBeforeApproval(t *testing.T) {
+	base := t.TempDir()
+	source := repo(t, base, "source", "2026-01-01T00:00:00Z")
+	shared := filepath.Join(base, "shared")
+	if b, e := exec.Command("git", "clone", "-q", "--shared", source, shared).CombinedOutput(); e != nil {
+		t.Fatal(string(b), e)
+	}
+	put(t, shared, "work.txt", "working tree")
+	m, files, e := BuildManifest(shared, shared, true)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if m.Git.HistoryIncluded || !slices.Contains(m.Excluded.Skipped, ".git") || !slices.Contains(files, "work.txt") {
+		t.Fatal(m, files)
+	}
+	for _, p := range files {
+		if strings.HasPrefix(p, ".git/") {
+			t.Fatal("external history included", p)
+		}
+	}
+	inv, e := capture(context.Background(), shared, shared, true)
+	if e != nil {
+		t.Fatal(e)
+	}
+	bundle, e := pack(context.Background(), inv, nil, false, t.TempDir(), nil)
+	if e != nil {
+		t.Fatal(e)
+	}
+	for name := range unpackTest(t, bundle.filename) {
+		if strings.HasPrefix(name, ".git/") {
+			t.Fatal(name)
+		}
+	}
+}

@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "releases": [
+    {
+      "version": "0.2.0",
+      "sha256": "42e249c352d8049d657874d3ce3d816d47a830a89545407dee675da50345d722",
+      "bytes": 11941692
+    }
+  ]
+}

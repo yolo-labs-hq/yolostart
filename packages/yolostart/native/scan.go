@@ -283,8 +283,18 @@ var scpRemote = regexp.MustCompile(`^[\w.-]+@[\w.-]+:[\w./-]+$`)
 
 func safeRemote(s string) *string {
 	u, e := url.Parse(s)
-	if e == nil && u.Host != "" && (u.Scheme == "http" || u.Scheme == "https" || u.Scheme == "ssh" || u.Scheme == "git") {
-		u.User = nil
+	if e == nil {
+		u.Scheme = strings.ToLower(u.Scheme)
+	}
+	if e == nil && u.Host != "" && (u.Scheme == "http" || u.Scheme == "https" || u.Scheme == "ssh" || u.Scheme == "git" || u.Scheme == "git+ssh" || u.Scheme == "ssh+git") {
+		if u.Scheme == "http" || u.Scheme == "https" {
+			u.User = nil
+		} else if u.User != nil {
+			if u.User.Username() == "" {
+				return nil
+			}
+			u.User = url.User(u.User.Username())
+		}
 		u.RawQuery = ""
 		u.Fragment = ""
 		return nullable(u.String())
@@ -324,7 +334,30 @@ func historySize(root string) (int64, bool, error) {
 		}
 		return nil
 	})
-	return total, true, err
+	if err != nil {
+		return total, false, err
+	}
+	// Even a small local .git can depend on an external object database. Never
+	// follow or upload its machine-specific pointer; keep the working tree only.
+	if _, err = os.Lstat(filepath.Join(marker, "objects", "info", "alternates")); err == nil {
+		return total, false, nil
+	} else if !os.IsNotExist(err) {
+		return total, false, err
+	}
+	if objects, err := os.Lstat(filepath.Join(marker, "objects")); err == nil && objects.Mode()&os.ModeSymlink != 0 {
+		return total, false, nil
+	} else if err != nil && !os.IsNotExist(err) {
+		return total, false, err
+	}
+	if _, err := os.Lstat(filepath.Join(marker, "commondir")); err == nil {
+		return total, false, nil
+	} else if !os.IsNotExist(err) {
+		return total, false, err
+	}
+	if os.Getenv("GIT_ALTERNATE_OBJECT_DIRECTORIES") != "" || os.Getenv("GIT_OBJECT_DIRECTORY") != "" || os.Getenv("GIT_COMMON_DIR") != "" {
+		return total, false, nil
+	}
+	return total, true, nil
 }
 
 func BuildManifest(root, scanRoot string, isRepo bool) (Manifest, []string, error) {
@@ -344,7 +377,7 @@ func BuildManifest(root, scanRoot string, isRepo bool) (Manifest, []string, erro
 		}
 		m.Git.HistoryBytes = size
 		m.Git.HistoryIncluded = available && size <= HistoryLimit
-		if available && !m.Git.HistoryIncluded {
+		if !m.Git.HistoryIncluded {
 			m.Excluded.Skipped = append(m.Excluded.Skipped, ".git")
 		}
 	}
@@ -363,6 +396,12 @@ func BuildManifest(root, scanRoot string, isRepo bool) (Manifest, []string, erro
 		for _, entry := range entries {
 			rel := filepath.ToSlash(filepath.Join(relative, entry.Name()))
 			full := filepath.Join(root, rel)
+			if rel == ".git" && (m.Git == nil || !m.Git.HistoryIncluded) {
+				if m.Git == nil {
+					m.Excluded.Skipped = append(m.Excluded.Skipped, rel)
+				}
+				continue
+			}
 			if rel == ".git/hooks" {
 				m.Excluded.Skipped = append(m.Excluded.Skipped, rel)
 				continue
@@ -394,7 +433,9 @@ func BuildManifest(root, scanRoot string, isRepo bool) (Manifest, []string, erro
 				}
 			}
 			if entry.Name() == ".git" && !info.IsDir() {
-				m.Excluded.Skipped = append(m.Excluded.Skipped, rel)
+				if m.Git == nil || m.Git.HistoryIncluded {
+					m.Excluded.Skipped = append(m.Excluded.Skipped, rel)
+				}
 				continue
 			}
 			isIgnored := parentIgnored || (rel != ".git" && !strings.HasPrefix(rel, ".git/") && ignored(rel, info.IsDir(), rules))
