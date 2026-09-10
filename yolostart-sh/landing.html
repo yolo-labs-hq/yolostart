@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Start with your local project. yolostart is a native CLI for YOLO Studio, with no Node or npm required.">
+  <title>yolostart — local work, cloud workspace</title>
+  <link rel="icon" href="data:,">
+  <style>
+    :root { color-scheme: dark; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; background: #111612; color: #e7eee8; }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    main { max-width: 880px; margin: 0 auto; padding: 64px 28px 40px; }
+    .eyebrow { color: #a3ecab; font-size: 12px; letter-spacing: .13em; }
+    h1 { font-size: clamp(32px, 6vw, 52px); line-height: 1.12; font-weight: 500; letter-spacing: -.055em; margin: 28px 0 20px; }
+    p { color: #b4c1b7; font-size: 15px; line-height: 1.8; max-width: 70ch; }
+    a { color: #a3ecab; text-underline-offset: 4px; }
+    a:hover { color: #e7eee8; }
+    a:focus-visible, summary:focus-visible, pre:focus-visible { outline: 2px solid #a3ecab; outline-offset: 5px; }
+    .command { background: #1c281f; border: 1px solid #405945; border-radius: 8px; padding: 22px; overflow-x: auto; margin: 28px 0 10px; font-size: 16px; line-height: 1.6; }
+    .command code { user-select: all; }
+    .hint { font-size: 12px; margin: 0 0 22px; }
+    .status { border-left: 2px solid #68784c; padding-left: 18px; margin: 28px 0; font-size: 13px; }
+    details { margin-top: 32px; border-top: 1px solid #334237; padding-top: 20px; }
+    summary { cursor: pointer; color: #b4c1b7; font-size: 13px; }
+    .banner { color: #a3ecab; font-size: 11px; line-height: 1.4; overflow-x: auto; padding: 14px 0; }
+    footer { border-top: 1px solid #334237; margin-top: 24px; padding-top: 22px; display: flex; flex-wrap: wrap; gap: 20px; font-size: 12px; }
+    @media (max-width: 540px) { main { padding: 36px 20px; } .command { padding: 16px; font-size: 13px; } }
+  </style>
+</head>
+<body>
+<main>
+  <div class="eyebrow">YOLO STUDIO / EARLY ACCESS</div>
+  <h1>Local work.<br>Cloud workspace.</h1>
+  <p>yolostart is a native command-line tool for bringing a local project into a YOLO Studio workspace. It reads your project on your machine and opens browser sign-in, with no Node or npm installation required. It runs on macOS and Linux, on Intel and ARM.</p>
+  <pre class="command" tabindex="0" aria-label="Installation command"><code>curl -fsSL https://yolostart.sh | sh</code></pre>
+  <p class="hint">Select the command to copy it. Run it from your project folder.</p>
+  <a href="/install.sh">Read the script first</a>
+  <p class="status">Import approval and workspace creation are coming soon. To sign in and inspect the scan manifest without uploading project files, add <code>-s -- --dry-run</code> after <code>sh</code>.</p>
+  <p><code>npx yolostart</code> — coming soon on npm.<br>The shell installer works without it.</p>
+  <details>
+    <summary>The octopus you'll meet in your terminal</summary>
+    <pre class="banner" tabindex="0" aria-label="YOLO octopus and yolostart terminal banner"><!-- INSTALL_BANNER --></pre>
+  </details>
+  <footer>
+    <a href="https://yolo.studio">YOLO Studio</a>
+    <a href="https://github.com/yolo-labs-hq/monorepo/tree/main/packages/yolostart">Source &amp; CLI documentation</a>
+    <a href="/install.sh">Raw installer</a>
+  </footer>
+</main>
+</body>
+</html>

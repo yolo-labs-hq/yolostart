@@ -18,7 +18,7 @@ const script = await readFile(
   new URL("../install.sh", import.meta.url),
   "utf8",
 );
-test("browser and curl receive exact POSIX source; release assets use the native distribution", async () => {
+test("User-Agent never selects HTML; release assets keep the native distribution", async () => {
   for (const agent of ["curl/8", "Mozilla/5.0"]) {
     const response = worker.fetch(
       new Request("https://example.test/", {
@@ -42,6 +42,44 @@ test("browser and curl receive exact POSIX source; release assets use the native
     404,
   );
 });
+test('document navigation and HTML Accept select the landing page with cache isolation', async () => {
+  const banner = script.match(/cat <<'BANNER'\n([\s\S]*?)\nBANNER\n/)[1];
+  const escaped = banner.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+  for (const headers of [
+    {'Sec-Fetch-Dest': 'document'},
+    {Accept: 'text/html'},
+    {Accept: 'text/html,application/xhtml+xml', 'User-Agent': 'curl/8'},
+    {'Sec-Fetch-Dest': 'document', Accept: '*/*'},
+  ]) {
+    const response = worker.fetch(new Request('https://example.test/', {headers}));
+    assert.equal(response.headers.get('content-type'), 'text/html; charset=utf-8');
+    assert.equal(response.headers.get('vary'), 'Accept, Sec-Fetch-Dest');
+    assert.equal(response.headers.get('cache-control'), 'no-store');
+    const html = await response.text();
+    assert.match(html, /curl -fsSL https:\/\/yolostart.sh \| sh/);
+    assert.match(html, /href="\/install.sh"/);
+    assert.match(html, /npx yolostart<\/code> — coming soon/);
+    assert.ok(html.includes(escaped), 'banner comes from the installer verbatim');
+    assert.doesNotMatch(html, /<script\b|<link[^>]+rel="stylesheet"|<img\b/i);
+  }
+});
+
+test('raw routes and curl-shaped requests always receive identical script bytes', async () => {
+  const browserHeaders = {'Sec-Fetch-Dest': 'document', Accept: 'text/html'};
+  for (const [path, headers] of [
+    ['/', {}], ['/', {Accept: '*/*'}], ['/', {'Sec-Fetch-Dest': 'empty'}],
+    ['/install.sh', browserHeaders], ['/install.sh?version=0.2.0', browserHeaders],
+    ['/?raw', browserHeaders], ['/?raw=1', browserHeaders],
+    ['/?version=0.2.0', {}],
+  ]) {
+    const response = worker.fetch(new Request('https://example.test' + path, {headers}));
+    assert.equal(response.headers.get('content-type'), 'text/plain; charset=utf-8');
+    assert.equal(response.headers.get('vary'), 'Accept, Sec-Fetch-Dest');
+    assert.equal(response.headers.get('cache-control'), 'no-store');
+    assert.deepEqual(Buffer.from(await response.arrayBuffer()), Buffer.from(script));
+  }
+});
+
 test("piped shell uses no Node/npm, preserves pins/arguments/exit status and fails on corruption", async () => {
   const dir = await mkdtemp(join(tmpdir(), "yolostart-shell-test-"));
   try {

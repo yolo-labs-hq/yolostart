@@ -1,7 +1,14 @@
 # yolostart.sh release retention
 
-The Worker still serves the exact POSIX `install.sh` at `/`, plus versioned
-native files and npm tarballs. `build.mjs` restores prior releases before adding
+The Worker serves a static landing page at `/` for `Sec-Fetch-Dest: document`
+or an `Accept` header containing `text/html`. Every other root request receives
+the exact POSIX `install.sh`. `/install.sh` and `/?raw` always serve the script,
+including in a browser. No User-Agent detection is used. Both responses carry
+`Vary: Accept, Sec-Fetch-Dest` and `Cache-Control: no-store` to isolate variants.
+`landing.html` has inline CSS and no JavaScript or external assets; its banner
+is embedded from the installer at build time. No installer bytes change.
+
+The Worker also serves versioned native files and npm tarballs. `build.mjs` restores prior releases before adding
 the current version. No deploy or storage credentials are used by the build.
 
 The durable source is the **active production asset store**, not preview URLs:
