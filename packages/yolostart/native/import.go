@@ -71,7 +71,7 @@ func newImport(w io.Writer, token string) *importDriver {
 	return &importDriver{
 		client:       &http.Client{Timeout: 2 * time.Minute, CheckRedirect: noRedirect},
 		uploadClient: &http.Client{Timeout: 15 * time.Minute, Transport: transport, CheckRedirect: noRedirect},
-		base:         "https://api.yolo.studio/v1", browser: "https://yolo.studio", token: token,
+		base:         defaultAPIURL, browser: defaultAppURL, token: token,
 		now: time.Now, sleep: auth.sleep, poll: 2 * time.Second, waitLimit: 20 * time.Minute, report: w,
 	}
 }
