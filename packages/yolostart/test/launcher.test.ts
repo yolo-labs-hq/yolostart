@@ -9,13 +9,19 @@ import { pathToFileURL, fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { launch } from "../src/launcher.js";
 const dist = new URL("../dist/", import.meta.url);
-const native = new URL("native/0.3.9/", dist);
+// Derived, never spelled out: three separate assertions used to hardcode the
+// version, and a bump that updated two of them shipped a green local build and
+// a red publish. The package is the single source of truth.
+const { version } = JSON.parse(
+  await readFile(new URL("../package.json", import.meta.url), "utf8"),
+) as { version: string };
+const native = new URL(`native/${version}/`, dist);
 
 test("npm wrapper runs the same native executable and forwards help/version", async () => {
   const manifest = JSON.parse(
     await readFile(new URL("manifest.json", native), "utf8"),
   );
-  assert.equal(manifest.version, "0.3.9");
+  assert.equal(manifest.version, version);
   assert.deepEqual(Object.keys(manifest.files).sort(), [
     "darwin-amd64",
     "darwin-arm64",
@@ -38,7 +44,7 @@ test("npm wrapper runs the same native executable and forwards help/version", as
     );
   }
   for (const [args, expected] of [
-    [["--version"], /0\.3\.8/],
+    [["--version"], new RegExp(`^${version.replace(/\./g, "\\.")}\\n?$`)],
     [["--help"], /Usage: yolostart/],
   ] as const) {
     const result = spawnSync(
