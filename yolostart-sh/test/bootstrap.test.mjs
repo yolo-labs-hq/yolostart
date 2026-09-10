@@ -60,7 +60,10 @@ test('document navigation and HTML Accept select the landing page with cache iso
     assert.match(html, /href="\/install.sh"/);
     assert.match(html, /npx yolostart<\/code> — coming soon/);
     assert.ok(html.includes(escaped), 'banner comes from the installer verbatim');
-    assert.doesNotMatch(html, /<script\b|<link[^>]+rel="stylesheet"|<img\b/i);
+    assert.equal((html.match(/<script\b/gi) ?? []).length, 1);
+    assert.match(html, /<script>[\s\S]*<\/script>\s*<\/body>/);
+    assert.doesNotMatch(html, /<script[^>]+src\s*=|<link[^>]+rel="stylesheet"|<img\b|\bsrc\s*=|@import|url\(/i);
+    assert.match(html, /<button[^>]+id="copy-command"[^>]+hidden>Copy<\/button>/);
   }
 });
 
