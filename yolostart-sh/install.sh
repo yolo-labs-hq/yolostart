@@ -18,7 +18,7 @@ cat <<'BANNER'
 |      ##  #   ##  ##       Local work. Cloud possibilities.                   |
 |         ## ###            You decide what comes along.                       |
 |         ##                                                                   |
-|          ###              EARLY ACCESS  /  DRY-RUN PREVIEW                   |
+|          ###              EARLY ACCESS  /  IMPORTS ARE LIVE                  |
 |                                                                              |
 | START WITH A LOOK AROUND                                                     |
 |   1. Run from your project folder, or use --scan ~/code.                     |
@@ -36,11 +36,11 @@ cat <<'BANNER'
 | YOUR WORK, YOUR CALL                                                         |
 |   Native executable. No Node, npm, or Go installation needed.                |
 |   No sudo. Dry runs upload nothing. Secret files stay excluded.              |
-|   Import approval and workspace creation are coming next.                    |
+|   Approve what comes along, then it lands in a running workspace.            |
 |                                                                              |
 | PREFER NPX?  /  SAME NATIVE CLI                                              |
-|   npx https://yolostart-sh.yolo.host/yolostart.tgz --dry-run                 |
-|   The shorter npx yolostart name awaits npm publication.                     |
+|   npx yolostart                                                              |
+|   A small wrapper that downloads this same verified binary.                  |
 |   Explore YOLO Studio: https://yolo.studio                                   |
 |   Read this script before running it. The code starts below.                 |
 +------------------------------------------------------------------------------+
