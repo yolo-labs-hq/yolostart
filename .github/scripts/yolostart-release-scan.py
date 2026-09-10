@@ -1,4 +1,4 @@
-"""Inspect the exact npm tarball and every embedded native executable.
+"""Inspect the exact bootstrap tarball or native release archive and executables.
 
 Known credential shapes are heuristic, not proof that all secrets are absent.
 Go's crypto runtime embeds PEM label strings; require a complete private-key
@@ -31,7 +31,7 @@ def scan_bytes(data, name):
             raise ValueError(f'Potential credential/internal-host pattern {index + 1} in {name}; match redacted')
 
 
-def inspect(filename, expected_version):
+def inspect(filename, expected_version, wrapper=False):
     entries = {}
     with tarfile.open(filename, 'r:gz') as archive:
         for entry in archive:
@@ -48,8 +48,16 @@ def inspect(filename, expected_version):
             scan_bytes(data, entry.name)
             entries[entry.name] = data
     package = json.loads(entries['package/package.json'])
-    if package['name'] != 'yolostart' or package['version'] != expected_version:
+    if package['name'] not in ({'yolostart'} if wrapper else {'yolostart', 'yolostart-native-release'}) or package['version'] != expected_version:
         raise ValueError('Packed package identity differs from release')
+    if wrapper:
+        allowed = {'package/package.json', 'package/README.md', 'package/THIRD_PARTY_NOTICES.txt',
+                   'package/dist/cli.js', 'package/dist/launcher.js', 'package/dist/release-url.mjs'}
+        if set(entries) != allowed or sum(map(len, entries.values())) > 256 << 10:
+            raise ValueError('Bootstrap must contain only the small explicit file allowlist')
+        if package.get('dependencies') or any(k in package.get('scripts', {}) for k in ('preinstall', 'install', 'postinstall')):
+            raise ValueError('Bootstrap must install offline without dependencies or lifecycle downloads')
+        return hashlib.sha256(Path(filename).read_bytes()).hexdigest()
     prefix = f'package/dist/native/{expected_version}/'
     manifest = json.loads(entries[prefix + 'manifest.json'])
     if manifest['version'] != expected_version or set(manifest['files']) != TARGETS:
@@ -68,6 +76,11 @@ def inspect(filename, expected_version):
         if len(raw) > 64 << 20 or hashlib.sha256(raw).hexdigest() != record['executableSha256']:
             raise ValueError('Executable checksum/size mismatch')
         scan_bytes(raw, name + ' (decompressed)')
+    if package['name'] == 'yolostart-native-release':
+        allowed = expected_gzip | {'package/package.json', prefix + 'manifest.json',
+                                  prefix + 'SHA256SUMS', prefix + 'THIRD_PARTY_NOTICES.txt'}
+        if set(entries) != allowed or package.get('private') is not True:
+            raise ValueError('Native release must contain only native assets and private identity')
     if {name for name in entries if name.endswith('.gz')} != expected_gzip:
         raise ValueError('Stale or extra compressed artifacts in npm package')
     return hashlib.sha256(Path(filename).read_bytes()).hexdigest()
@@ -75,11 +88,11 @@ def inspect(filename, expected_version):
 
 if __name__ == '__main__':
     try:
-        digest = inspect(sys.argv[1], sys.argv[2])
+        digest = inspect(sys.argv[1], sys.argv[2], '--wrapper' in sys.argv[3:])
         if os.environ.get('GITHUB_OUTPUT'):
             with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
                 output.write(f'sha256={digest}\n')
-        print('Exact tarball and all four decompressed executables passed credential-pattern and checksum checks')
+        print('Exact bootstrap tarball passed credential-pattern and shape checks' if '--wrapper' in sys.argv[3:] else 'Exact native archive and all four executables passed credential-pattern and checksum checks')
     except (ValueError, KeyError, OSError, tarfile.TarError) as error:
         print(f'Release scan failed: {error}', file=sys.stderr)
         sys.exit(1)

@@ -53,6 +53,31 @@ class ScanTest(unittest.TestCase):
                 scan.inspect(filename, '1.0.0')
             self.assertNotIn(credential.decode(), str(caught.exception))
 
+    def test_thin_bootstrap_shape_and_install_hooks(self):
+        with tempfile.TemporaryDirectory() as directory:
+            filename = Path(directory) / 'bootstrap.tgz'
+            pkg = {'name': 'yolostart', 'version': '1.0.0'}
+            entries = {f'package/{name}': b'fixture' for name in
+                       ('README.md', 'THIRD_PARTY_NOTICES.txt', 'dist/cli.js', 'dist/launcher.js', 'dist/release-url.mjs')}
+            def pack():
+                entries['package/package.json'] = json.dumps(pkg).encode()
+                with tarfile.open(filename, 'w:gz') as archive:
+                    for name, content in entries.items():
+                        entry = tarfile.TarInfo(name)
+                        entry.size = len(content)
+                        archive.addfile(entry, io.BytesIO(content))
+            pack()
+            scan.inspect(filename, '1.0.0', wrapper=True)
+            entries['package/dist/native/old/stale.gz'] = gzip.compress(b'stale')
+            pack()
+            with self.assertRaisesRegex(ValueError, 'allowlist'):
+                scan.inspect(filename, '1.0.0', wrapper=True)
+            del entries['package/dist/native/old/stale.gz']
+            pkg['scripts'] = {'postinstall': 'fetch-native'}
+            pack()
+            with self.assertRaisesRegex(ValueError, 'lifecycle'):
+                scan.inspect(filename, '1.0.0', wrapper=True)
+
     def test_pem_payload_not_go_parser_label(self):
         scan.scan_bytes(b'-----BEGIN PRIVATE KEY-----', 'Go parser constant')
         with self.assertRaisesRegex(ValueError, 'redacted'):

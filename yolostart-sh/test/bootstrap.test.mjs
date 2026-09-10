@@ -156,7 +156,7 @@ test('npx package alias maps to the versioned tarball without stale caching', as
   let target;
   const response = await worker.fetch(new Request('https://example.test/yolostart.tgz'), {ASSETS:{fetch(request){target=new URL(request.url).pathname;return new Response('package');}}});
   const { version } = JSON.parse(await readFile(new URL('../../packages/yolostart/package.json', import.meta.url), 'utf8'));
-  assert.equal(target, `/releases/${version}/yolostart-${version}.tgz`);
+  assert.equal(target, `/bootstrap/yolostart-${version}.tgz`);
   assert.equal(response.headers.get('cache-control'),'no-store');
   assert.equal(await response.text(),'package');
 });

@@ -1,14 +1,16 @@
 {
   "name": "yolostart",
-  "version": "0.3.12",
-  "description": "Native YOLO Studio project import CLI, also available through npx",
+  "version": "1.0.0",
+  "description": "Thin bootstrap for the official yolostart native CLI",
   "license": "MIT",
   "type": "module",
   "bin": {
     "yolostart": "dist/cli.js"
   },
   "files": [
-    "dist",
+    "dist/cli.js",
+    "dist/launcher.js",
+    "dist/release-url.mjs",
     "README.md",
     "THIRD_PARTY_NOTICES.txt"
   ],
@@ -21,9 +23,11 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "typecheck:test": "tsc -p tsconfig.test.json --noEmit",
-    "test": "npm run build && tsx --test test/*.test.ts && node scripts/go.mjs test ./...",
+    "test": "npm run build && tsx --test test/*.test.ts",
     "prepublishOnly": "npm run build && npm run typecheck:test && npm test",
-    "test:native": "node scripts/go.mjs test ./..."
+    "test:native": "node scripts/go.mjs test ./...",
+    "build:native": "node scripts/build-native.mjs",
+    "pack:native": "node scripts/pack-native.mjs"
   },
   "dependencies": {},
   "devDependencies": {

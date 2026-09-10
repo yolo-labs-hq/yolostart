@@ -1,23 +1,37 @@
-# yolostart 0.3.6
+# yolostart
 
 One native CLI, two entry points:
 
-- **Shell:** `curl -fsSL https://yolostart-sh.yolo.host | sh -s -- --dry-run`
-  downloads a checksummed executable into a temporary directory and runs it.
-  No Node, npm, Go, or system installation is needed. macOS and Linux on
-  x64/arm64 are supported; Linux builds use `CGO_ENABLED=0`.
-- **npm:** `npx https://yolostart-sh.yolo.host/yolostart.tgz --dry-run`
-  runs the **same executable**, bundled in the
-  npm package. The small Node wrapper verifies and unpacks the appropriate
-  binary, forwards arguments/signals/exit status, and cleans its temporary
-  directory on normal exit. There are no install scripts or extra downloads.
-  The shorter `npx yolostart --dry-run` awaits npm registry publication.
+- **Shell:** `curl -fsSL https://yolostart.sh | sh` downloads and runs the official
+  native executable. No Node, npm, Go, or system installation is needed.
+- **npm:** `npx https://yolostart-sh.yolo.host/yolostart.tgz` runs the same executable
+  through a small Node 20+ bootstrap. `npx yolostart` will be available after the
+  operator enables npm publication; it remains dark until then.
 
-The custom hostname `yolostart.sh` is live (operator-verified). `YOLOSTART_VERSION=0.2.0` pins the shell's release. For npm, use
-`npx https://yolostart-sh.yolo.host/releases/0.2.0/yolostart-0.2.0.tgz`.
-After registry publication, `npx yolostart@0.2.0` also works. Git is required for repository discovery and metadata.
+The **npm version (1.0.0) tracks the bootstrap**, independently of the native CLI.
+`yolostart --version` reports the native CLI version. Updating the CLI does not
+require publishing another npm package. Both installers resolve `latest.txt`
+from `https://yolostart-sh.yolo.host/releases/`. Pin either with `YOLOSTART_VERSION`:
 
-## Import flow (0.3.6; server integration pending)
+```sh
+YOLOSTART_VERSION=0.3.12 npx https://yolostart-sh.yolo.host/yolostart.tgz --dry-run
+curl -fsSL https://yolostart.sh | YOLOSTART_VERSION=0.3.12 sh -s -- --dry-run
+```
+
+The bootstrap has no dependencies or install hooks. It downloads at first **run**,
+only for the current macOS/Linux x64/arm64 platform. It verifies SHA-256 of both
+compressed and decompressed bytes against the release manifest, limits decompression
+to 64 MiB, and follows only the shared allowlisted Host-to-dl artifact redirect.
+Verified gzip and executable files are cached under
+`${XDG_CACHE_HOME:-$HOME/.cache}/yolostart/<native-version>/`. Atomic temporary-file
+renames make interrupted or concurrent downloads safe. Every run fetches a fresh
+manifest and rechecks cached bytes; a valid cache avoids the binary download,
+not the metadata request. Remove that version's cache directory to evict it.
+Arguments, terminal streams, signals and exit status pass through to the native CLI.
+Download/verification failures exit without executing unverified bytes and point
+to the shell installer. Git is required for repository discovery and metadata.
+
+## Import flow
 
 Without `--dry-run`, the CLI signs in, scans, creates an approval session, prints
 the browser URL, and waits. The browser picks one candidate, its workspace name
@@ -30,14 +44,9 @@ polling timeout exit unsuccessfully. Approval and seed polling each have a
 20-minute limit. No terminal input is used.
 
 `--dry-run` authenticates and prints JSON metadata on stdout. Tokens stay in
-memory. After installation, its only network calls are device code creation and
-token polling; it creates no approval session and uploads nothing. The npm
-wrapper runs the same native program and flags.
-
-Local HTTPS fixtures exercise the agreed S2/S4/S5 client contract; a real
-browser-to-pod import awaits the server owner's branch and deployment. The
-currently hosted tarball remains the earlier release until this change is
-reviewed and shipped. Registry publication requires operator npm credentials.
+memory. The native CLI only calls device code creation and token polling; it
+creates no approval session and uploads nothing. The npm bootstrap fetches release
+metadata first, then runs that same native program and flags.
 
 `--scan ~/code` changes the starting directory. A repo at or above that
 location wins; otherwise discovery examines children through depth two.
@@ -87,22 +96,23 @@ explain. Working-tree secret exclusions remain mandatory.
 
 ## Development and release
 
-Install Go 1.24+ and Node 20+ **on the build machine**, then `npm ci`.
-`npm run build` compiles the wrapper and cross-compiles all four native targets.
-Set `GO_BINARY` if Go isn't on PATH. Artifacts and SHA-256 manifests are generated
-under `dist/native/<version>/`; Go source in `native/` is the only CLI logic.
-Builds are cached by source digest, and cached artifacts are rehashed before use.
+Use Node 20+ and `npm ci` for the bootstrap. `npm run build`, `npm test` and
+`npm run typecheck:test` need no Go toolchain or public release network access.
+`npm pack` uses an explicit small file allowlist: stale `dist/native` directories
+cannot enter the npm tarball. Bump package.json/package-lock.json only when the
+bootstrap changes, in the same commit.
 
-Run `npm run typecheck:test` and `npm test` (wrapper tests plus native Go tests).
-`npm pack` includes the four compressed binaries; consumers need no compiler.
-The host build copies those exact artifacts to `/releases/<version>/` and serves
-`/releases/latest.txt`. Commit the version bump with behavior changes, verify a
-preview, then promote. The host restores all prior versioned packages from the live release index and
-verifies hashes before adding a version; unavailable archives stop the build.
+Native CLI changes bump `native/version.json` in their own commit. With Go installed
+(or `GO_BINARY` set), run `npm run test:native` and `npm run pack:native` to cross-build
+all four targets and create `dist/releases/yolostart-<native-version>.tgz`.
+This deterministic archive contains only the native artifacts and release identity;
+it is **not an npm package to install**. Its legacy internal directory layout lets
+Host restore old and new release pins together. `scripts/check-native.mjs` scans
+that exact archive and runs the current platform's executable offline.
+
+Host restores prior archives from the live release index, verifies them, then adds
+the new native version. Its `/yolostart.tgz` alias serves the thin bootstrap separately.
 See [host release retention](../../yolostart-sh/README.md) before deploying.
-
-This native + optional npm architecture supersedes the plan's original
-npm-only bootstrap choice at the operator's request. The plan is left unchanged.
 
 Finalize retries a refusal at most twice when its envelope explicitly carries
 `retryable: true` (currently only `upload-not-arrived`). Status codes and message
@@ -119,13 +129,16 @@ lets a test fix release an earlier failed bump without changing the version agai
 An existing registry version is a no-op; only a 404 means it is unpublished.
 Manual runs are main-only and default to `dry_run: true`.
 
-The workflow pins Go 1.27.1, compiles Linux/macOS amd64/arm64, typechecks tests,
-and packs once. It checks known credential shapes in the exact tarball and all
-four decompressed binaries, validates their checksums, and clean-installs the
-same tarball offline to run `--version` and `--help`. This heuristic scan is not
-proof that all secrets are absent. The publisher rechecks the tarball digest and
-uses the repository's `libnpmpublish`/`forceAuth` approach, with public access for
-unscoped `yolostart`. It never repacks or invokes publish lifecycle scripts.
+The npm workflow needs no Go: it tests the bootstrap, scans the exact packed file
+allowlist for credential patterns, then clean-installs and loads it offline with
+install scripts disabled. This heuristic scan is not proof that all secrets are
+absent. The publisher rechecks the tarball digest before publishing those exact
+bytes. It never repacks. The job stays dark on **all** triggers, including manual
+dry-runs, until `vars.YOLOSTART_PUBLISH_ENABLED='true'` is set by the operator.
+
+The independent downloads workflow reads `native/version.json`, cross-builds and
+scans the native archive and all four executables, and publishes verified immutable
+objects to dl.yolo.studio. It never publishes to npm.
 
 The operator must provision repository secret `NPM_TOKEN` with write access to
 `yolostart`; missing credentials fail with `ENEEDAUTH`. No token is available to

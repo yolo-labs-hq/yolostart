@@ -1,0 +1,23 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {mkdtemp,rm,readFile} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import path from 'node:path';
+import {execFile} from 'node:child_process';
+import {promisify} from 'node:util';
+import {fileURLToPath} from 'node:url';
+const exec = promisify(execFile);
+test('exact npm tarball is small, has no natives/hooks, and installs and loads offline',async t=>{
+  const dir=await mkdtemp(path.join(tmpdir(),'yolostart-npm-'));
+  t.after(()=>rm(dir,{recursive:true,force:true}));
+  const root=fileURLToPath(new URL('../',import.meta.url));
+  const packed=JSON.parse((await exec('npm',['pack','--ignore-scripts','--json','--pack-destination',dir],{cwd:root})).stdout)[0];
+  assert.ok(packed.size < 64*1024,`unexpected package size: ${packed.size}`);
+  assert.deepEqual(packed.files.map((f:{path:string})=>f.path).sort(),['README.md','THIRD_PARTY_NOTICES.txt','dist/cli.js','dist/launcher.js','dist/release-url.mjs','package.json']);
+  await exec('python3',[fileURLToPath(new URL('../../../.github/scripts/yolostart-release-scan.py',import.meta.url)),path.join(dir,packed.filename),packed.version,'--wrapper']);
+  await exec('npm',['install','--offline','--ignore-scripts','--no-audit','--no-fund','--cache',path.join(dir,'empty-cache'),path.join(dir,packed.filename)],{cwd:dir});
+  const pkg=JSON.parse(await readFile(path.join(dir,'node_modules/yolostart/package.json'),'utf8'));
+  assert.deepEqual(pkg.dependencies,{});
+  for(const hook of ['preinstall','install','postinstall']) assert.equal(pkg.scripts[hook],undefined);
+  await exec(process.execPath,['--input-type=module','-e','const m=await import("./node_modules/yolostart/dist/launcher.js"); if(typeof m.launch!=="function") throw Error("load failed");'],{cwd:dir});
+});
