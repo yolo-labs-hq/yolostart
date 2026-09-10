@@ -1,4 +1,4 @@
-# yolostart 0.3.4
+# yolostart 0.3.5
 
 One native CLI, two entry points:
 
@@ -17,7 +17,7 @@ The custom hostname `yolostart.sh` is live (operator-verified). `YOLOSTART_VERSI
 `npx https://yolostart-sh.yolo.host/releases/0.2.0/yolostart-0.2.0.tgz`.
 After registry publication, `npx yolostart@0.2.0` also works. Git is required for repository discovery and metadata.
 
-## Import flow (0.3.4; server integration pending)
+## Import flow (0.3.5; server integration pending)
 
 Without `--dry-run`, the CLI signs in, scans, creates an approval session, prints
 the browser URL, and waits. The browser picks one candidate, its workspace name

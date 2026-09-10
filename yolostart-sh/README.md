@@ -36,3 +36,42 @@ Verification: `npm test` builds with real public release restoration and runs
 Worker/bootstrap tests plus isolated restoration fixtures. The latter simulate
 a second build into an empty directory, preservation of all four native targets
 and both tarballs, changed bytes, missing archives and missing inventory.
+
+## Separate R2 downloads (dark)
+
+`.github/workflows/publish-yolostart-downloads.yml` publishes native releases to
+`https://dl.yolo.studio/yolostart/<version>/`, using the historical yolomax bucket
+`yolostudio-dl` (`R2_DL_BUCKET_NAME` override). It is independent of npm publishing.
+The job requires repository variable `YOLOSTART_DL_PUBLISH_ENABLED` to equal
+`true` on every trigger, including manual dry-runs. Absent means skipped. Pushes
+to main and successful same-repository main push runs of `yolostart tests` wake
+it; workflow_run checks out the tested SHA. PRs/forks cannot enter the job.
+
+After review/merge and an operator enable, dispatch with `dry_run=true` to build
+all four targets, run tests, scan the exact npm archive and decompressed
+executables, and test a clean offline npm installation. `dry_run=false` uploads.
+The existing `Production` environment secrets `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`,
+and `R2_SECRET_ACCESS_KEY` are the historical distribution credential path;
+no new GitHub secret or GSM read/IAM grant is introduced. Inventory §1 documents
+this path separately from the running-service GSM credentials. Their current
+presence and write grant to the downloads bucket are not proven by repo code;
+missing/denied credentials fail loudly. The bucket override is optional.
+
+Each version contains raw `yolostart-{linux,darwin}-{amd64,arm64}` executables,
+the corresponding `.gz` files, `SHASUMS256.txt`, `manifest.json`, notices, and
+the npm tarball. All are derived from one scanned archive snapshot. Conditional
+creation refuses changed bytes at existing paths; identical retries work.
+Versioned objects are read back from R2 and verified byte-for-byte over public
+HTTPS. Only then is `yolostart/latest/manifest.json` advanced, as one no-store
+object, using compare-and-swap. Installers can resolve its version then fetch
+immutable paths. Older releases cannot roll latest backward; a partial upload
+or failed latest update can be retried. Do not expire these release objects via
+bucket lifecycle rules (unlike short-lived import bundles in another prefix).
+
+DNS failure for `dl.yolo.studio` was reported from the sandbox; the 2026-09-10
+recheck resolved and returned HTTP 404 at `/`. Neither result proves the artifact
+binding. Post-upload public verification is the operator's first real signal.
+The installer and Host retention build still use their working Host origin;
+cutover is separate work after R2 downloads verify, retaining all existing Host
+version URLs. This workflow creates no bucket, changes no DNS, deploys no Worker,
+and publishes nothing to npm.
