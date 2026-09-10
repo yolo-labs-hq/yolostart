@@ -106,3 +106,5 @@ credential or DNS change is needed. If sufficient identical copies cannot be
 verified at build time, the build stops rather than discarding pins or shipping
 an oversized bundle. Public verification uses the same product User-Agent as
 the downloads workflow.
+
+Favicons are embedded into the Worker at build time from `icons/`: the emerald octopus SVG from `assets/octopus-emerald.svg`, and the existing webapp 32px/180px brand PNGs (32px wrapped as ICO). Icon routes cache for one day; HTML remains uncached. No external icon requests or installer changes.

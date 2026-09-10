@@ -63,6 +63,11 @@ test('document navigation and HTML Accept select the landing page with cache iso
     assert.equal((html.match(/<script\b/gi) ?? []).length, 1);
     assert.match(html, /<script>[\s\S]*<\/script>\s*<\/body>/);
     assert.doesNotMatch(html, /<script[^>]+src\s*=|<link[^>]+rel="stylesheet"|<img\b|\bsrc\s*=|@import|url\(/i);
+    const links = [...html.matchAll(/<link\b[^>]*href="([^"]+)"[^>]*>/gi)].map(match => match[1]);
+    assert.equal(links.length, 3);
+    assert.deepEqual(links.filter(href => !href.startsWith('data:image/svg+xml;base64,')), ['/favicon.ico', '/apple-touch-icon.png']);
+    const svg = Buffer.from(links.find(href => href.startsWith('data:')).split(',')[1], 'base64').toString();
+    assert.equal(svg, await readFile(new URL('../icons/octopus.svg', import.meta.url), 'utf8'));
     assert.match(html, /<button[^>]+id="copy-command"[^>]+hidden>Copy<\/button>/);
   }
 });
@@ -159,4 +164,24 @@ test('npx package alias maps to the versioned tarball without stale caching', as
 test('release inventory is never served from a stale browser cache',async()=>{
  const response=await worker.fetch(new Request('https://example.test/releases/index.json'),{ASSETS:{fetch:()=>Response.json({schemaVersion:1,releases:[]})}});
  assert.equal(response.headers.get('cache-control'),'no-store');
+});
+
+test('embedded icons serve branded bytes regardless of browser headers', async () => {
+  for (const [path, type] of [['favicon.ico', 'image/x-icon'], ['apple-touch-icon.png', 'image/png']]) {
+    for (const headers of [{}, {Accept:'text/html', 'Sec-Fetch-Dest':'document'}]) {
+      const response = worker.fetch(new Request('https://example.test/' + path, {headers}));
+      assert.equal(response.status, 200);
+      assert.equal(response.headers.get('content-type'), type);
+      assert.equal(response.headers.get('cache-control'), 'public, max-age=86400');
+      const bytes = Buffer.from(await response.arrayBuffer());
+      assert.deepEqual(bytes, await readFile(new URL('../icons/' + path, import.meta.url)));
+      if (path.endsWith('.png')) {
+        assert.equal(bytes.readUInt32BE(16), 180);
+        assert.equal(bytes.readUInt32BE(20), 180);
+      } else {
+        assert.equal(bytes.readUInt16LE(2), 1);
+        assert.equal(bytes.readUInt16LE(4), 1);
+      }
+    }
+  }
 });

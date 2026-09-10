@@ -17,7 +17,13 @@ if (!banner) throw Error('Installer banner missing');
 const template = await readFile(new URL('./landing.html', import.meta.url), 'utf8');
 if (template.split('<!-- INSTALL_BANNER -->').length !== 2) throw Error('Landing banner slot missing or duplicated');
 const escapeHtml = value => value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
-const landing = template.replace('<!-- INSTALL_BANNER -->', () => escapeHtml(banner));
+const svg = await readFile(new URL('./icons/octopus.svg', import.meta.url), 'utf8');
+const landing = template.replace('<!-- INSTALL_BANNER -->', () => escapeHtml(banner))
+  .replace('<!-- ICON_SVG -->', () => 'data:image/svg+xml;base64,' + Buffer.from(svg).toString('base64'));
+const icons = {};
+for (const [path, type] of [['favicon.ico', 'image/x-icon'], ['apple-touch-icon.png', 'image/png']]) {
+  icons['/' + path] = {type, bytes: (await readFile(new URL('./icons/' + path, import.meta.url))).toString('base64')};
+}
 const {version} = JSON.parse(await readFile(new URL('../packages/yolostart/package.json', import.meta.url), 'utf8'));
 await mkdir(new URL('./dist/',import.meta.url),{recursive:true});
 const staging=await mkdtemp(fileURLToPath(new URL('./dist/release-build-',import.meta.url)));
@@ -48,8 +54,13 @@ await writeFile(
 const script = ${JSON.stringify(script)};
 const landing = ${JSON.stringify(landing)};
 const downloads = ${JSON.stringify(downloads)};
+const icons = ${JSON.stringify(icons)};
 export default { fetch(request, env) {
   const url = new URL(request.url);
+  if (icons[url.pathname]) {
+    const icon = icons[url.pathname];
+    return new Response(Uint8Array.from(atob(icon.bytes), c => c.charCodeAt(0)), {headers:{'Content-Type':icon.type, 'Cache-Control':'public, max-age=86400', 'X-Content-Type-Options':'nosniff'}});
+  }
   const noStore = url.pathname === '/yolostart.tgz' || url.pathname === '/releases/latest.txt' || url.pathname === '/releases/index.json';
   if (url.pathname === '/yolostart.tgz') url.pathname = '/releases/${version}/yolostart-${version}.tgz';
   if (url.pathname.startsWith('/releases/')) {
