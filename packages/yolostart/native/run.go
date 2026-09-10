@@ -20,11 +20,11 @@ func run(ctx context.Context, args []string, out, errOut io.Writer, login func(c
 	flags.SetOutput(errOut)
 	scan := flags.String("scan", "", "directory to scan (default: current directory)")
 	project := flags.String("project", "", "one named repository or relative path")
-	noBrowser := flags.Bool("no-browser", false, "print sign-in link without opening a browser")
+	noBrowser := flags.Bool("no-browser", false, "print the sign-in and approval links without opening a browser")
 	dry := flags.Bool("dry-run", false, "print candidate metadata without uploading")
 	version := flags.Bool("version", false, "print version")
 	flags.Usage = func() {
-		fmt.Fprintln(out, "Usage: yolostart [--no-browser] [--dry-run] [--scan <directory>] [--project <name-or-relative-path>]\nSigns in, scans, and prints browser approval before importing one project.\n--dry-run prints metadata without creating an approval session or uploading.\nGit is required for repository discovery; no language runtime is needed.")
+		fmt.Fprintln(out, "Usage: yolostart [--no-browser] [--dry-run] [--scan <directory>] [--project <name-or-relative-path>]\nSigns in, scans, and opens browser approval before importing one project.\n--dry-run prints metadata without creating an approval session or uploading.\nGit is required for repository discovery; no language runtime is needed.")
 	}
 	if e := flags.Parse(args); e != nil {
 		if errors.Is(e, flag.ErrHelp) {
@@ -72,6 +72,7 @@ func run(ctx context.Context, args []string, out, errOut io.Writer, login func(c
 		}
 		driver := newImport(errOut, token)
 		driver.base, driver.browser = urls.api, urls.app
+		driver.openBrowser = func(uri string) { openBrowser(uri, *noBrowser, errOut) }
 		return driver.execute(ctx, manifest, inventories, out)
 	}
 	manifest, e := Scan(*scan, *project)

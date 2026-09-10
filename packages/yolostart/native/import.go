@@ -59,8 +59,11 @@ type importDriver struct {
 	sleep                func(context.Context, time.Duration) error
 	poll, waitLimit      time.Duration
 	report               io.Writer
-	lastProgress         time.Time
-	lastProgressBody     string
+	// openBrowser is nil in tests and under --no-browser; the approval link is
+	// always printed first, so the browser is strictly an accelerant.
+	openBrowser      func(string)
+	lastProgress     time.Time
+	lastProgressBody string
 }
 
 func newImport(w io.Writer, token string) *importDriver {
@@ -296,7 +299,11 @@ func (d *importDriver) execute(ctx context.Context, manifest ScanManifest, inven
 	if created.Status != "awaiting-approval" {
 		return errors.New("new session is not awaiting approval")
 	}
-	fmt.Fprintf(d.report, "Approve import: %s/start/%s\n", d.browser, url.PathEscape(created.ID))
+	approvalURL := fmt.Sprintf("%s/start/%s", d.browser, url.PathEscape(created.ID))
+	fmt.Fprintf(d.report, "Approve import: %s\n", approvalURL)
+	if d.openBrowser != nil {
+		d.openBrowser(approvalURL)
+	}
 	approved, e := d.wait(ctx, route, false)
 	if e != nil {
 		return e

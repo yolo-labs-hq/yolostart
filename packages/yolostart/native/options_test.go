@@ -128,3 +128,36 @@ func TestRunUsesConfiguredAPIAndApprovalURL(t *testing.T) {
 		t.Fatal(err, calls, report.String())
 	}
 }
+
+// The approval link must be printed before the browser is opened, and must be
+// the exact URL handed to the browser — a user whose browser never appears has
+// only the printed line to fall back on. --no-browser suppresses the open (and
+// only the open) via the same nil-able hook, which is why run() leaves it unset
+// rather than the driver branching on a flag.
+func TestApprovalLinkPrintedBeforeBrowserOpen(t *testing.T) {
+	const id = "0123456789abcdef01234567"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == "POST" {
+			io.WriteString(w, `{"id":"`+id+`","status":"awaiting-approval"}`)
+			return
+		}
+		io.WriteString(w, `{"id":"`+id+`","status":"denied"}`)
+	}))
+	defer server.Close()
+	var report bytes.Buffer
+	d := newImport(&report, "fixture")
+	d.base, d.browser = server.URL+"/v1", "https://app.example.test"
+	opened := []string{}
+	d.openBrowser = func(uri string) {
+		opened = append(opened, uri)
+		if !strings.Contains(report.String(), "Approve import: "+uri+"\n") {
+			t.Fatal("browser opened before the link was printed", report.String(), uri)
+		}
+	}
+	err := d.execute(context.Background(), ScanManifest{}, nil, io.Discard)
+	want := "https://app.example.test/start/" + id
+	if err == nil || err.Error() != "import denied" || len(opened) != 1 || opened[0] != want {
+		t.Fatal(err, opened, report.String())
+	}
+}
