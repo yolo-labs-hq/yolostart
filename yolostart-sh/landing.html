@@ -35,17 +35,25 @@
        closed beta is something a visitor needs to know BEFORE they wonder why
        sign-in did not let them in, so it gets a real container rather than a
        footnote. */
-    .waitlist { margin-top: 56px; border: 1px solid #3c4f41; border-radius: 8px; background: #151d17; padding: 24px 22px; }
-    .waitlist h2 { font-size: 15px; font-weight: 600; margin: 0 0 8px; color: #e7eee8; }
-    .waitlist p { font-size: 13px; margin: 0 0 14px; }
-    .beta-tag { display: inline-block; margin-bottom: 12px; padding: 3px 9px; border: 1px solid #68784c; border-radius: 999px; background: #1e2618; color: #cfe0a8; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; }
+    /* BLUE ON PURPOSE. Everything above is green because it is terminal
+       output and commands. This is the one place asking something OF the
+       reader, so it steps out of that palette instead of being a slightly
+       different shade of the same thing. Kept dark rather than a literally
+       light panel: a pale block here would out-shout the install commands,
+       which are still the point of the page. */
+    .waitlist { margin-top: 56px; border: 1px solid #35506b; border-radius: 8px; background: #141b24; padding: 24px 22px; }
+    .waitlist h2 { font-size: 15px; font-weight: 600; margin: 0 0 8px; color: #eaf2fa; }
+    .waitlist p { font-size: 13px; margin: 0 0 14px; color: #b3c4d6; }
+    .beta-tag { display: inline-block; margin-bottom: 12px; padding: 3px 9px; border: 1px solid #4a6f96; border-radius: 999px; background: #172231; color: #b9d9f5; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; }
     .waitlist form { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
-    .waitlist input { flex: 1 1 260px; min-width: 0; padding: 10px 12px; border: 1px solid #405945; border-radius: 5px; background: #161f18; color: #e7eee8; font: inherit; font-size: 14px; }
-    .waitlist input:focus-visible { outline: 2px solid #a3ecab; outline-offset: 2px; }
-    .waitlist button { flex-shrink: 0; padding: 10px 16px; border: 1px solid #68916e; border-radius: 5px; background: #263e2c; color: #c4f6ca; font: inherit; font-size: 13px; cursor: pointer; }
-    .waitlist button:hover:not(:disabled) { background: #33523b; }
+    .waitlist input { flex: 1 1 260px; min-width: 0; padding: 10px 12px; border: 1px solid #35506b; border-radius: 5px; background: #101720; color: #eaf2fa; font: inherit; font-size: 14px; }
+    .waitlist input::placeholder { color: #6d8299; }
+    .waitlist input:focus-visible { outline: 2px solid #8fc6f2; outline-offset: 2px; }
+    .waitlist button { flex-shrink: 0; padding: 10px 16px; border: 1px solid #4a7fae; border-radius: 5px; background: #1b2f45; color: #cfe6fb; font: inherit; font-size: 13px; cursor: pointer; }
+    .waitlist button:hover:not(:disabled) { background: #24405c; }
+    .waitlist button:focus-visible { outline: 2px solid #8fc6f2; outline-offset: 3px; }
     .waitlist button:disabled { opacity: 0.6; cursor: default; }
-    .waitlist .note { font-size: 12px; margin: 10px 0 0; min-height: 1.4em; }
+    .waitlist .note { font-size: 12px; margin: 10px 0 0; min-height: 1.4em; color: #9fc4e4; }
     .waitlist .note.bad { color: #f2b8b5; }
     .command code { user-select: all; }
     .hint { font-size: 12px; margin: 0 0 22px; }
