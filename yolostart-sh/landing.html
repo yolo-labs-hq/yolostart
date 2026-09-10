@@ -21,8 +21,13 @@
     a:focus-visible, summary:focus-visible, pre:focus-visible, button:focus-visible { outline: 2px solid #a3ecab; outline-offset: 5px; }
     .command-row { display: flex; align-items: center; gap: 16px; background: #1c281f; border: 1px solid #405945; border-radius: 8px; padding: 18px 22px; margin: 28px 0 10px; }
     .command { flex: 1; min-width: 0; overflow-x: auto; margin: 0; font-size: 16px; line-height: 1.6; }
-    #copy-command { flex-shrink: 0; min-width: 76px; padding: 10px 12px; border: 1px solid #68916e; border-radius: 5px; background: #263e2c; color: #c4f6ca; font: inherit; font-size: 13px; cursor: pointer; }
-    #copy-command:hover { background: #33523b; }
+    .copy-command { flex-shrink: 0; min-width: 76px; padding: 10px 12px; border: 1px solid #68916e; border-radius: 5px; background: #263e2c; color: #c4f6ca; font: inherit; font-size: 13px; cursor: pointer; }
+    .copy-command:hover { background: #33523b; }
+    /* The npx route is an alternative, not an equal: same binary, but it needs
+       Node. Slightly quieter so the no-dependency route stays the obvious one. */
+    .command-row.alt { margin-top: 10px; background: #18211a; border-color: #33472f; }
+    .command-row.alt .command { font-size: 15px; }
+    .alt-label { font-size: 13px; margin: 30px 0 0; color: #b4c1b7; }
     .command code { user-select: all; }
     .hint { font-size: 12px; margin: 0 0 22px; }
     .status { border-left: 2px solid #68784c; padding-left: 18px; margin: 28px 0; font-size: 13px; }
@@ -40,12 +45,17 @@
   <p>yolostart is a native command-line tool for bringing a local project into a YOLO Studio workspace. It reads your project on your machine, opens browser sign-in, and asks you to approve what comes along before anything uploads — with no Node or npm installation required. It runs on macOS and Linux, on Intel and ARM.</p>
   <div class="command-row">
     <pre class="command" tabindex="0" aria-label="Installation command"><code id="install-command">curl -fsSL https://yolostart.sh | sh</code></pre>
-    <button id="copy-command" type="button" aria-live="polite" hidden>Copy</button>
+    <button class="copy-command" type="button" aria-live="polite" hidden>Copy</button>
   </div>
   <p class="hint" id="copy-hint" aria-live="polite">Select the command to copy it. Run it from your project folder.</p>
   <a href="/install.sh">Read the script first</a>
   <p class="status">Import approval and workspace creation are live: yolostart scans your project, you approve exactly what comes along in the browser, and it lands in a running workspace. To sign in and inspect the scan manifest without uploading anything, add <code>-s -- --dry-run</code> after <code>sh</code>.</p>
-  <p>Already have Node? <code>npx yolostart</code> does the same thing — a small wrapper that downloads this same verified native binary, so both routes run identical code. The shell installer needs no Node at all.</p>
+  <p class="alt-label">Already have Node? Same tool, same verified binary:</p>
+  <div class="command-row alt">
+    <pre class="command" tabindex="0" aria-label="npm installation command"><code id="npx-command">npx yolostart</code></pre>
+    <button class="copy-command" type="button" aria-live="polite" hidden>Copy</button>
+  </div>
+  <p class="hint">A small wrapper that downloads this same native binary and checks it, so both routes run identical code. The shell installer needs no Node at all.</p>
   <details>
     <summary>The octopus you'll meet in your terminal</summary>
     <pre class="banner" tabindex="0" aria-label="YOLO octopus and yolostart terminal banner"><!-- INSTALL_BANNER --></pre>
@@ -58,10 +68,17 @@
 </main>
 <script>
 (() => {
-  const button = document.getElementById('copy-command');
-  const command = document.getElementById('install-command');
-  const hint = document.getElementById('copy-hint');
-  const originalHint = hint.textContent;
+  // Wire every command block. Each row owns its button and its code element,
+  // and borrows the .hint that follows it for the clipboard-denied fallback —
+  // so a copy failure explains itself next to the command it happened to,
+  // rather than under a different one.
+  document.querySelectorAll('.command-row').forEach((row) => {
+  const button = row.querySelector('.copy-command');
+  const command = row.querySelector('code');
+  const next = row.nextElementSibling;
+  const hint = next && next.classList.contains('hint') ? next : null;
+  if (!button || !command) return;
+  const originalHint = hint ? hint.textContent : '';
   let reset;
   button.hidden = false;
   button.addEventListener('click', async () => {
@@ -71,7 +88,7 @@
     try {
       await navigator.clipboard.writeText(command.textContent);
       button.textContent = 'Copied';
-      hint.textContent = originalHint;
+      if (hint) hint.textContent = originalHint;
       reset = setTimeout(() => { button.textContent = 'Copy'; }, 1500);
     } catch {
       command.parentElement.focus();
@@ -80,10 +97,11 @@
       const selection = window.getSelection();
       selection.removeAllRanges();
       selection.addRange(range);
-      hint.textContent = 'Command selected. Press Cmd/Ctrl-C to copy.';
+      if (hint) hint.textContent = 'Command selected. Press Cmd/Ctrl-C to copy.';
     } finally {
       button.disabled = false;
     }
+  });
   });
 })();
 </script>

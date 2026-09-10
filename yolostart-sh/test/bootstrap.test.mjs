@@ -73,7 +73,13 @@ test('document navigation and HTML Accept select the landing page with cache iso
     assert.deepEqual(links.filter(href => !href.startsWith('data:image/svg+xml;base64,')), ['/favicon.ico', '/apple-touch-icon.png']);
     const svg = Buffer.from(links.find(href => href.startsWith('data:')).split(',')[1], 'base64').toString();
     assert.equal(svg, await readFile(new URL('../icons/octopus.svg', import.meta.url), 'utf8'));
-    assert.match(html, /<button[^>]+id="copy-command"[^>]+hidden>Copy<\/button>/);
+    // BOTH command blocks carry a copy button, and both ship `hidden` so the
+    // page is correct without JavaScript — the script reveals them. A button
+    // that renders visible but inert when scripting is off is worse than none.
+    const buttons = html.match(/<button[^>]*class="copy-command"[^>]*hidden>Copy<\/button>/g) ?? [];
+    assert.equal(buttons.length, 2, 'curl and npx each get a copy button, both hidden until JS runs');
+    assert.match(html, /id="install-command">curl -fsSL/);
+    assert.match(html, /id="npx-command">npx yolostart</);
   }
 });
 
