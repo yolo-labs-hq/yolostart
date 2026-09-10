@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -19,24 +20,46 @@ func TestBrowserDecision(t *testing.T) {
 		env      map[string]string
 		disabled bool
 		want     []string
+		reason   string
 	}{
-		{"mac", "darwin", nil, false, []string{"open", uri}},
-		{"linux headless", "linux", nil, false, nil},
-		{"X11", "linux", map[string]string{"DISPLAY": ":0"}, false, []string{"xdg-open", uri}},
-		{"Wayland", "linux", map[string]string{"WAYLAND_DISPLAY": "wayland-0"}, false, []string{"xdg-open", uri}},
-		{"explicit headless", "linux", map[string]string{"BROWSER": "firefox"}, false, []string{"firefox", uri}},
-		{"explicit mac", "darwin", map[string]string{"BROWSER": "/Applications/My Browser/bin/open"}, false, []string{"/Applications/My Browser/bin/open", uri}},
-		{"CI overrides explicit", "darwin", map[string]string{"CI": "true", "BROWSER": "firefox"}, false, nil},
-		{"CI false still set", "linux", map[string]string{"CI": "false", "DISPLAY": ":0"}, false, nil},
-		{"flag overrides explicit", "linux", map[string]string{"DISPLAY": ":0", "BROWSER": "firefox"}, true, nil},
-		{"flag on mac", "darwin", nil, true, nil},
-		{"unsupported", "windows", nil, false, nil},
+		{"mac", "darwin", nil, false, []string{"open", uri}, ""},
+		{"linux headless", "linux", nil, false, nil, "No desktop session detected (DISPLAY and WAYLAND_DISPLAY unset) — open the link above."},
+		{"X11", "linux", map[string]string{"DISPLAY": ":0"}, false, []string{"xdg-open", uri}, ""},
+		{"Wayland", "linux", map[string]string{"WAYLAND_DISPLAY": "wayland-0"}, false, []string{"xdg-open", uri}, ""},
+		{"explicit headless", "linux", map[string]string{"BROWSER": "firefox"}, false, []string{"firefox", uri}, ""},
+		{"explicit mac", "darwin", map[string]string{"BROWSER": "/Applications/My Browser/bin/open"}, false, []string{"/Applications/My Browser/bin/open", uri}, ""},
+		{"CI overrides explicit", "darwin", map[string]string{"CI": "true", "BROWSER": "firefox"}, false, nil, "Not opening a browser automatically (CI is set)."},
+		{"CI false still set", "linux", map[string]string{"CI": "false", "DISPLAY": ":0"}, false, nil, "Not opening a browser automatically (CI is set)."},
+		{"flag overrides explicit", "linux", map[string]string{"DISPLAY": ":0", "BROWSER": "firefox"}, true, nil, ""},
+		{"flag on mac", "darwin", nil, true, nil, ""},
+		{"unsupported", "windows", nil, false, nil, "Automatic browser opening is unsupported on windows — open the link above."},
+		{"flag overrides CI", "linux", map[string]string{"CI": "true"}, true, nil, ""},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := browserCommand(tt.os, tt.env, tt.disabled, uri); !reflect.DeepEqual(got, tt.want) {
-				t.Fatalf("%v != %v", got, tt.want)
+			if got, reason := browserCommand(tt.os, tt.env, tt.disabled, uri); !reflect.DeepEqual(got, tt.want) || reason != tt.reason {
+				t.Fatalf("args %v, reason %q; want %v, %q", got, reason, tt.want, tt.reason)
 			}
 		})
+	}
+}
+
+func TestBrowserReporting(t *testing.T) {
+	t.Setenv("CI", "true")
+	var report bytes.Buffer
+	openBrowser("https://yolo.studio/device", false, &report)
+	if got := report.String(); got != "Not opening a browser automatically (CI is set).\n" {
+		t.Fatalf("unexpected CI report: %q", got)
+	}
+	report.Reset()
+	openBrowser("https://yolo.studio/device", true, &report)
+	if report.Len() != 0 {
+		t.Fatalf("--no-browser must stay silent: %q", report.String())
+	}
+	t.Setenv("CI", "")
+	t.Setenv("BROWSER", filepath.Join(t.TempDir(), "missing-browser"))
+	openBrowser("https://yolo.studio/device", false, &report)
+	if got := report.String(); got != "Could not launch a browser — open the link above.\n" {
+		t.Fatalf("unexpected launch failure report: %q", got)
 	}
 }
 

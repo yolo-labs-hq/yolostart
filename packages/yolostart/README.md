@@ -4,15 +4,15 @@ One native CLI, two entry points:
 
 - **Shell:** `curl -fsSL https://yolostart.sh | sh` downloads and runs the official
   native executable. No Node, npm, Go, or system installation is needed.
-- **npm:** `npx https://yolostart-sh.yolo.host/yolostart.tgz` runs the same executable
-  through a small Node 20+ bootstrap. `npx yolostart` will be available after the
-  operator enables npm publication; it remains dark until then.
+- **npm:** `npx yolostart` runs the same executable through a small Node 20+
+  bootstrap. The direct tarball is also available at
+  `https://yolostart-sh.yolo.host/yolostart.tgz`.
 
-The **npm package and native CLI share the same version**, currently 0.3.12.
-`npx yolostart@0.3.12` runs CLI 0.3.12. The thin tarball embeds all four platforms'
+The **npm package and native CLI share the same version**, currently 0.3.13.
+`npx yolostart@0.3.13` runs CLI 0.3.13. The thin tarball embeds all four platforms'
 compressed and executable SHA-256 digests, verified at build time against the
 native artifacts. By default it downloads only the current platform's gzip from
-`https://yolostart-sh.yolo.host/releases/0.3.12/`; it fetches neither `latest.txt`
+`https://yolostart-sh.yolo.host/releases/0.3.13/`; it fetches neither `latest.txt`
 nor a manifest. Its integrity anchor is the npm tarball itself.
 
 `YOLOSTART_VERSION` explicitly switches to **override mode**: that version's
@@ -22,7 +22,7 @@ manifest is fetched and both digests are checked against it instead. An explicit
 
 ```sh
 YOLOSTART_VERSION=0.3.11 npx https://yolostart-sh.yolo.host/yolostart.tgz --dry-run
-curl -fsSL https://yolostart.sh | YOLOSTART_VERSION=0.3.12 sh -s -- --dry-run
+curl -fsSL https://yolostart.sh | YOLOSTART_VERSION=0.3.13 sh -s -- --dry-run
 ```
 
 The bootstrap has no dependencies or install hooks. It downloads at first **run**,
@@ -163,7 +163,9 @@ macOS `open`, or Linux `xdg-open` when `DISPLAY` or `WAYLAND_DISPLAY` is set.
 `BROWSER` takes precedence and names an executable or absolute executable path
 (not a shell command); the URL is passed as a separate argument. A nonempty
 `CI` variable or `--no-browser` suppresses automatic opening. Launch failure is
-silent, and a launched browser never blocks sign-in polling or inherits input.
+reported as a one-line fallback on stderr. CI suppression and missing desktop
+sessions also explain why the browser did not open; explicit `--no-browser` stays
+silent. A launched browser never blocks sign-in polling or inherits input.
 
 `YOLOSTART_API_URL` overrides `https://api.yolo.studio/v1` and
 `YOLOSTART_APP_URL` overrides `https://yolo.studio`. Set the full API base,

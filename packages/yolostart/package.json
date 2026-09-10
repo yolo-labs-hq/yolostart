@@ -1,6 +1,6 @@
 {
   "name": "yolostart",
-  "version": "0.3.12",
+  "version": "0.3.13",
   "description": "Thin bootstrap for the official yolostart native CLI",
   "license": "MIT",
   "type": "module",
