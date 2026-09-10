@@ -82,3 +82,24 @@ The installer and Host retention build still use their working Host origin;
 cutover is separate work after R2 downloads verify, retaining all existing Host
 version URLs. This workflow creates no bucket, changes no DNS, deploys no Worker,
 and publishes nothing to npm.
+
+## Host asset capacity
+
+The third native release exceeds Host's 50 MiB bundle cap if every archive and
+compressed executable is copied into each deployment. The build still restores
+and verifies the entire historical inventory first. When its asset tree exceeds
+49 MiB (leaving room for Worker code), it looks for identical versioned tarballs
+and gzip executables in the existing `dl.yolo.studio/yolostart/<version>/` store.
+Only a complete set verified byte-for-byte is removed from the local asset
+bundle; old releases absent from that bucket remain on Host. Checksums, manifest
+and notices remain local, and every old `/releases/<version>/...` URL survives.
+
+The Worker embeds an exact URL, size and SHA-256 for each externally served
+payload. It fetches without redirects or user credentials and verifies the
+length and digest before returning any bytes. Failure returns a download error,
+never an unverified executable. This also lets a subsequent clean build restore
+archives through their original Host URLs. The existing downloads bucket must
+retain these immutable objects; no bucket, credential or DNS change is needed.
+If sufficient identical copies cannot be verified, the build stops rather than
+discarding pins or shipping an oversized bundle. Public verification uses the
+same product User-Agent as the downloads workflow.

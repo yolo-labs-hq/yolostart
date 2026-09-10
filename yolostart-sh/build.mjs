@@ -2,6 +2,8 @@ import { mkdir, readFile, writeFile, cp, mkdtemp, rm, rename } from "node:fs/pro
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { restoreReleases, addRelease } from './releases.mjs';
+import { compactReleases } from './distribution.mjs';
+import { serveDownload } from './download-proxy.mjs';
 const result = spawnSync("npm", ["run", "build"], {
   cwd: new URL("../packages/yolostart/", import.meta.url),
   stdio: "inherit",
@@ -20,6 +22,7 @@ const landing = template.replace('<!-- INSTALL_BANNER -->', () => escapeHtml(ban
 const {version} = JSON.parse(await readFile(new URL('../packages/yolostart/package.json', import.meta.url), 'utf8'));
 await mkdir(new URL('./dist/',import.meta.url),{recursive:true});
 const staging=await mkdtemp(fileURLToPath(new URL('./dist/release-build-',import.meta.url)));
+let downloads;
 try {
   const assets=staging+'/assets';
   const releases=assets+'/releases';
@@ -36,6 +39,7 @@ try {
   const packed=spawnSync('npm',['pack','--ignore-scripts','--json','--pack-destination',staging],{cwd:packageDir,encoding:'utf8'});
   if(packed.error||packed.status!==0) throw Error('npm package build failed');
   await addRelease(index,staging+'/yolostart-'+version+'.tgz',version,releases);
+  downloads=await compactReleases(index,releases);
   await rm(new URL('./dist/assets/',import.meta.url),{recursive:true,force:true});
   await rename(assets,new URL('./dist/assets/',import.meta.url));
 } finally { await rm(staging,{recursive:true,force:true}); }
@@ -44,12 +48,14 @@ await writeFile(
   `// Generated from install.sh and landing.html; do not edit.
 const script = ${JSON.stringify(script)};
 const landing = ${JSON.stringify(landing)};
+const downloads = ${JSON.stringify(downloads)};
+${serveDownload.toString()}
 export default { fetch(request, env) {
   const url = new URL(request.url);
   const noStore = url.pathname === '/yolostart.tgz' || url.pathname === '/releases/latest.txt' || url.pathname === '/releases/index.json';
   if (url.pathname === '/yolostart.tgz') url.pathname = '/releases/${version}/yolostart-${version}.tgz';
   if (url.pathname.startsWith('/releases/')) {
-    const response = env.ASSETS.fetch(new Request(url, request));
+    const response = downloads[url.pathname] ? serveDownload(downloads[url.pathname]) : env.ASSETS.fetch(new Request(url, request));
     if (!noStore) return response;
     return Promise.resolve(response).then(result => {
       const headers = new Headers(result.headers); headers.set('Cache-Control', 'no-store');
