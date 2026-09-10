@@ -23,10 +23,12 @@
     .command { flex: 1; min-width: 0; overflow-x: auto; margin: 0; font-size: 16px; line-height: 1.6; }
     .copy-command { flex-shrink: 0; min-width: 76px; padding: 10px 12px; border: 1px solid #68916e; border-radius: 5px; background: #263e2c; color: #c4f6ca; font: inherit; font-size: 13px; cursor: pointer; }
     .copy-command:hover { background: #33523b; }
-    /* The npx route is an alternative, not an equal: same binary, but it needs
-       Node. Slightly quieter so the no-dependency route stays the obvious one. */
-    .command-row.alt { margin-top: 10px; background: #18211a; border-color: #33472f; }
-    .command-row.alt .command { font-size: 15px; }
+    /* Both command rows are IDENTICAL. They are the same kind of thing: a
+       command you copy and run. An earlier version dimmed the npx one to mark
+       it "secondary", which just read as a rendering inconsistency. Ordering
+       and the label above it already say which route is the default. `.alt`
+       now carries spacing only, because a label sits directly above it. */
+    .command-row.alt { margin-top: 10px; }
     .alt-label { font-size: 13px; margin: 30px 0 0; color: #b4c1b7; }
     /* Clearly set apart from the install commands: its own panel, well below
        them. Still not the primary CTA: the page is about running the tool. But
