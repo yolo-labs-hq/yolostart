@@ -1,9 +1,9 @@
-import { mkdir, readFile, writeFile, cp, mkdtemp, rm, rename } from "node:fs/promises";
+import { mkdir, readFile, writeFile, mkdtemp, rm, rename } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
 import { restoreReleases, addRelease } from './releases.mjs';
 import { compactReleases } from './distribution.mjs';
-const result = spawnSync("npm", ["run", "build"], {
+const result = spawnSync("npm", ["run", "pack:native"], {
   cwd: new URL("../packages/yolostart/", import.meta.url),
   stdio: "inherit",
 });
@@ -25,6 +25,9 @@ for (const [path, type] of [['favicon.ico', 'image/x-icon'], ['apple-touch-icon.
   icons['/' + path] = {type, bytes: (await readFile(new URL('./icons/' + path, import.meta.url))).toString('base64')};
 }
 const {version} = JSON.parse(await readFile(new URL('../packages/yolostart/package.json', import.meta.url), 'utf8'));
+const {version: bootstrapVersion} = JSON.parse(await readFile(new URL('../packages/yolostart/package.json', import.meta.url), 'utf8'));
+const bootstrapBuild=spawnSync('npm',['run','build'],{cwd:new URL('../packages/yolostart/',import.meta.url),stdio:'inherit'});
+if(bootstrapBuild.error || bootstrapBuild.status!==0) throw Error('Bootstrap build failed');
 await mkdir(new URL('./dist/',import.meta.url),{recursive:true});
 const staging=await mkdtemp(fileURLToPath(new URL('./dist/release-build-',import.meta.url)));
 let downloads;
@@ -33,17 +36,11 @@ try {
   const releases=assets+'/releases';
   const bootstrap=JSON.parse(await readFile(new URL('./releases.json',import.meta.url),'utf8'));
   const index=await restoreReleases(releases,bootstrap);
-  // Pack a clean package tree: ignored historical local outputs must not alter
-  // the bytes or bulk of a versioned npm tarball.
-  const packageDir=staging+'/package';
-  await mkdir(packageDir+'/dist/native/'+version,{recursive:true});
-  for(const filename of ['package.json','README.md','THIRD_PARTY_NOTICES.txt','dist/cli.js','dist/launcher.js'])
-    await cp(new URL('../packages/yolostart/'+filename,import.meta.url),packageDir+'/'+filename);
-  await cp(new URL('../packages/yolostart/dist/native/'+version+'/',import.meta.url),packageDir+'/dist/native/'+version,{recursive:true});
-  await writeFile(packageDir+'/dist/native/latest.txt',version+'\n');
-  const packed=spawnSync('npm',['pack','--ignore-scripts','--json','--pack-destination',staging],{cwd:packageDir,encoding:'utf8'});
-  if(packed.error||packed.status!==0) throw Error('npm package build failed');
-  await addRelease(index,staging+'/yolostart-'+version+'.tgz',version,releases);
+  await addRelease(index,fileURLToPath(new URL(`../packages/yolostart/dist/releases/yolostart-${version}.tgz`,import.meta.url)),version,releases);
+  // npm pack has an explicit file allowlist: native archives never enter it.
+  await mkdir(assets+'/bootstrap',{recursive:true});
+  const packed=spawnSync('npm',['pack','--ignore-scripts','--json','--pack-destination',assets+'/bootstrap'],{cwd:new URL('../packages/yolostart/',import.meta.url),encoding:'utf8'});
+  if(packed.error||packed.status!==0) throw Error('Bootstrap package build failed');
   downloads=await compactReleases(index,releases);
   await rm(new URL('./dist/assets/',import.meta.url),{recursive:true,force:true});
   await rename(assets,new URL('./dist/assets/',import.meta.url));
@@ -62,8 +59,8 @@ export default { fetch(request, env) {
     return new Response(Uint8Array.from(atob(icon.bytes), c => c.charCodeAt(0)), {headers:{'Content-Type':icon.type, 'Cache-Control':'public, max-age=86400', 'X-Content-Type-Options':'nosniff'}});
   }
   const noStore = url.pathname === '/yolostart.tgz' || url.pathname === '/releases/latest.txt' || url.pathname === '/releases/index.json';
-  if (url.pathname === '/yolostart.tgz') url.pathname = '/releases/${version}/yolostart-${version}.tgz';
-  if (url.pathname.startsWith('/releases/')) {
+  if (url.pathname === '/yolostart.tgz') url.pathname = '/bootstrap/yolostart-${bootstrapVersion}.tgz';
+  if (url.pathname.startsWith('/releases/') || url.pathname.startsWith('/bootstrap/')) {
     const response = downloads[url.pathname] ? new Response(null, {status:307, headers:{Location:downloads[url.pathname].url, 'Cache-Control':'public, max-age=31536000, immutable'}}) : env.ASSETS.fetch(new Request(url, request));
     if (!noStore) return response;
     return Promise.resolve(response).then(result => {

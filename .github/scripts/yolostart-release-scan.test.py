@@ -14,11 +14,11 @@ spec.loader.exec_module(scan)
 
 
 class ScanTest(unittest.TestCase):
-    def artifact(self, path, payload=b'native executable', corrupt=False, extra=False):
+    def artifact(self, path, payload=b'native executable', corrupt=False, extra=False, targets=None):
         prefix = 'package/dist/native/1.0.0/'
         entries = {'package/package.json': json.dumps({'name': 'yolostart', 'version': '1.0.0'}).encode()}
         manifest = {'version': '1.0.0', 'files': {}}
-        for target in scan.TARGETS:
+        for target in (scan.TARGETS if targets is None else targets):
             compressed = gzip.compress(payload)
             name = f'yolostart-{target}.gz'
             entries[prefix + name] = compressed
@@ -44,6 +44,14 @@ class ScanTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'extra compressed'):
                 scan.inspect(filename, '1.0.0')
 
+    def test_native_scan_never_passes_with_zero_or_missing_targets(self):
+        with tempfile.TemporaryDirectory() as directory:
+            filename = Path(directory) / 'native.tgz'
+            for targets in (set(), scan.TARGETS - {'linux-arm64'}):
+                self.artifact(filename, targets=targets)
+                with self.assertRaisesRegex(ValueError, 'Exactly four native targets'):
+                    scan.inspect(filename, '1.0.0')
+
     def test_secret_in_compressed_binary_is_detected_and_redacted(self):
         with tempfile.TemporaryDirectory() as directory:
             filename = Path(directory) / 'package.tgz'
@@ -52,6 +60,39 @@ class ScanTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'decompressed') as caught:
                 scan.inspect(filename, '1.0.0')
             self.assertNotIn(credential.decode(), str(caught.exception))
+
+    def test_thin_bootstrap_shape_and_install_hooks(self):
+        with tempfile.TemporaryDirectory() as directory:
+            filename = Path(directory) / 'bootstrap.tgz'
+            pkg = {'name': 'yolostart', 'version': '1.0.0'}
+            entries = {f'package/{name}': b'fixture' for name in
+                       ('README.md', 'THIRD_PARTY_NOTICES.txt', 'dist/cli.js', 'dist/launcher.js', 'dist/release-url.mjs')}
+            pin = {'version': '1.0.0', 'files': {target: dict(file=f'yolostart-{target}.gz', sha256='a' * 64, executableSha256='b' * 64) for target in scan.TARGETS}}
+            entries['package/dist/launcher.js'] = ('const PINNED_RELEASE = ' + json.dumps(pin) + ';\n').encode()
+            def pack():
+                entries['package/package.json'] = json.dumps(pkg).encode()
+                with tarfile.open(filename, 'w:gz') as archive:
+                    for name, content in entries.items():
+                        entry = tarfile.TarInfo(name)
+                        entry.size = len(content)
+                        archive.addfile(entry, io.BytesIO(content))
+            pack()
+            scan.inspect(filename, '1.0.0', wrapper=True)
+            original = entries['package/dist/launcher.js']
+            entries['package/dist/launcher.js'] = original.replace(b'1.0.0', b'0.9.0')
+            pack()
+            with self.assertRaisesRegex(ValueError, 'pin must match'):
+                scan.inspect(filename, '1.0.0', wrapper=True)
+            entries['package/dist/launcher.js'] = original
+            entries['package/dist/native/old/stale.gz'] = gzip.compress(b'stale')
+            pack()
+            with self.assertRaisesRegex(ValueError, 'allowlist'):
+                scan.inspect(filename, '1.0.0', wrapper=True)
+            del entries['package/dist/native/old/stale.gz']
+            pkg['scripts'] = {'postinstall': 'fetch-native'}
+            pack()
+            with self.assertRaisesRegex(ValueError, 'lifecycle'):
+                scan.inspect(filename, '1.0.0', wrapper=True)
 
     def test_pem_payload_not_go_parser_label(self):
         scan.scan_bytes(b'-----BEGIN PRIVATE KEY-----', 'Go parser constant')

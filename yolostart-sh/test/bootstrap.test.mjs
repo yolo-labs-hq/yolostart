@@ -152,40 +152,13 @@ test("piped shell uses no Node/npm, preserves pins/arguments/exit status and fai
   }
 });
 
-async function assertPackageAlias(workerUnderTest, expectedExternal) {
-  const targets = [];
-  const response = await workerUnderTest.fetch(new Request('https://example.test/yolostart.tgz'), {ASSETS:{fetch(request){targets.push(new URL(request.url).pathname);return new Response('package');}}});
-  const { version } = JSON.parse(await readFile(new URL('../../packages/yolostart/package.json', import.meta.url), 'utf8'));
-  assert.equal(response.headers.get('cache-control'), 'no-store');
-  if (expectedExternal !== undefined) assert.equal(response.status, expectedExternal ? 307 : 200);
-  if (response.status === 307) {
-    assert.deepEqual(targets, [], 'external alias must not fetch local assets');
-    assert.equal(response.headers.get('location'), `https://dl.yolo.studio/yolostart/${version}/yolostart-${version}.tgz`);
-    assert.equal(await response.text(), '');
-  } else {
-    assert.equal(response.status, 200);
-    assert.deepEqual(targets, [`/releases/${version}/yolostart-${version}.tgz`]);
-    assert.equal(response.headers.get('location'), null);
-    assert.equal(await response.text(), 'package');
-  }
-}
-
 test('npx package alias maps to the versioned tarball without stale caching', async () => {
-  await assertPackageAlias(worker);
-});
-
-test('npx alias preserves its contract for both local and external release inventories', async () => {
-  const source = await readFile(new URL('../dist/worker.mjs', import.meta.url), 'utf8');
+  let target;
+  const response = await worker.fetch(new Request('https://example.test/yolostart.tgz'), {ASSETS:{fetch(request){target=new URL(request.url).pathname;return new Response('package');}}});
   const { version } = JSON.parse(await readFile(new URL('../../packages/yolostart/package.json', import.meta.url), 'utf8'));
-  // Replace only generated inventory data; execute the actual generated route.
-  const inventory = /^const downloads = .*;$/m;
-  assert.equal(source.match(new RegExp(inventory.source, 'gm'))?.length, 1);
-  for (const external of [false, true]) {
-    const downloads = external ? {[`/releases/${version}/yolostart-${version}.tgz`]: {url: `https://dl.yolo.studio/yolostart/${version}/yolostart-${version}.tgz`}} : {};
-    const fixtureSource = source.replace(inventory, () => `const downloads = ${JSON.stringify(downloads)};`);
-    const { default: fixtureWorker } = await import(`data:text/javascript;base64,${Buffer.from(fixtureSource).toString('base64')}`);
-    await assertPackageAlias(fixtureWorker, external);
-  }
+  assert.equal(target, `/bootstrap/yolostart-${version}.tgz`);
+  assert.equal(response.headers.get('cache-control'),'no-store');
+  assert.equal(await response.text(),'package');
 });
 
 test('release inventory is never served from a stale browser cache',async()=>{

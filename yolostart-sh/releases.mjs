@@ -1,9 +1,10 @@
+import {RELEASE_BASE, trustedReleaseRedirect} from '../packages/yolostart/src/release-url.mjs';
 import { createHash } from 'node:crypto';
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 
-export const releaseOrigin = 'https://yolostart-sh.yolo.host/releases/';
+export const releaseOrigin = RELEASE_BASE;
 const targets = ['linux-amd64', 'linux-arm64', 'darwin-amd64', 'darwin-arm64'];
 export const digest = data => createHash('sha256').update(data).digest('hex');
 const versionPattern = /^\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?$/;
@@ -21,13 +22,8 @@ export function validateIndex(index) {
 async function download(url, limit, fetchImpl) {
   let response = await fetchImpl(url, {redirect:'manual', cache:'no-store', signal:AbortSignal.timeout(60000)});
   if ([301,302,303,307,308].includes(response.status)) {
-    const source = new URL(url);
     const target = response.headers.get('location');
-    // Only the exact historical artifact may move to our existing downloads
-    // bucket. No arbitrary redirect chains or origin supplied by a response.
-    const match = source.pathname.match(/^\/releases\/([0-9A-Za-z.-]+)\/(yolostart-[0-9A-Za-z.-]+\.tgz)$/);
-    if (source.origin !== new URL(releaseOrigin).origin || !match || target !== `https://dl.yolo.studio/yolostart/${match[1]}/${match[2]}`)
-      throw Error('Untrusted release redirect');
+    if (!target || !trustedReleaseRedirect(url, target)) throw Error('Untrusted release redirect');
     response = await fetchImpl(target, {redirect:'error', cache:'no-store', headers:{'User-Agent':'yolostart-release/1 (+https://yolo.studio)'}, signal:AbortSignal.timeout(60000)});
   }
   if (!response.ok) { const error = Error(`Release restoration failed (HTTP ${response.status})`); error.status = response.status; throw error; }
@@ -51,7 +47,7 @@ export async function installRelease(record, data, target) {
   const archive=join(dir,`yolostart-${record.version}.tgz`);
   await writeFile(archive,data);
   const pkg=JSON.parse(member(archive,'package/package.json'));
-  if(pkg.name!=='yolostart'||pkg.version!==record.version) throw Error('Release package identity mismatch');
+  if(!['yolostart','yolostart-native-release'].includes(pkg.name)||pkg.version!==record.version) throw Error('Release package identity mismatch');
   const prefix=`package/dist/native/${record.version}/`;
   const metadata=member(archive,prefix+'manifest.json');
   const manifest=JSON.parse(metadata);

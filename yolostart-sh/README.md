@@ -8,15 +8,15 @@ including in a browser. No User-Agent detection is used. Both responses carry
 `landing.html` has inline CSS and one inline clipboard script, with no external assets; its banner
 is embedded from the installer at build time. No installer bytes change.
 
-The Worker also serves versioned native files and npm tarballs. `build.mjs` restores prior releases before adding
+The Worker also serves versioned native files and release archives, plus a separate thin npm bootstrap. `build.mjs` restores prior releases before adding
 the current version. No deploy or storage credentials are used by the build.
 
 The durable source is the **active production asset store**, not preview URLs:
 YOLO Host keeps the active release but can garbage-collect superseded previews.
 Each deployment carries every prior archive and native file forward. The mutable
-`/releases/index.json` lists immutable package versions, byte lengths and SHA-256
+`/releases/index.json` lists immutable native versions, byte lengths and SHA-256
 hashes, and is served/fetched without caching. Builds download each versioned
-npm tarball from the stable host, verify its hash and package identity, then
+release archive from the stable host, verify its hash and package identity, then
 restore its native artifacts and checksums. Local ignored build folders are
 never treated as the archive.
 
@@ -55,8 +55,8 @@ to main and successful same-repository main push runs of `yolostart tests` wake
 it; workflow_run checks out the tested SHA. PRs/forks cannot enter the job.
 
 After review/merge and an operator enable, dispatch with `dry_run=true` to build
-all four targets, run tests, scan the exact npm archive and decompressed
-executables, and test a clean offline npm installation. `dry_run=false` uploads.
+all four targets, run tests, scan the exact native archive and decompressed
+executables, and run its current-platform binary offline. `dry_run=false` uploads.
 The existing `Production` environment secrets `R2_ENDPOINT`, `R2_ACCESS_KEY_ID`,
 and `R2_SECRET_ACCESS_KEY` are the historical distribution credential path;
 no new GitHub secret or GSM read/IAM grant is introduced. Inventory §1 documents
@@ -66,7 +66,7 @@ missing/denied credentials fail loudly. The bucket override is optional.
 
 Each version contains raw `yolostart-{linux,darwin}-{amd64,arm64}` executables,
 the corresponding `.gz` files, `SHASUMS256.txt`, `manifest.json`, notices, and
-the npm tarball. All are derived from one scanned archive snapshot. Conditional
+the native release archive. All are derived from one scanned archive snapshot. Conditional
 creation refuses changed bytes at existing paths; identical retries work.
 Versioned objects are read back from R2 and verified byte-for-byte over public
 HTTPS. Only then is `yolostart/latest/manifest.json` advanced, as one no-store
@@ -108,3 +108,20 @@ an oversized bundle. Public verification uses the same product User-Agent as
 the downloads workflow.
 
 Favicons are embedded into the Worker at build time from `icons/`: the emerald octopus SVG from `assets/octopus-emerald.svg`, and the existing webapp 32px/180px brand PNGs (32px wrapped as ICO). Icon routes cache for one day; HTML remains uncached. No external icon requests or installer changes.
+
+## Thin npm bootstrap with a shared release version
+
+`packages/yolostart/package.json` controls the native binaries, npm bootstrap,
+release paths and `latest.txt`. Build native archives with `npm run pack:native`;
+do not use npm pack as the native archive builder. New release archives retain
+legacy internal paths for restoration but identify as private
+`yolostart-native-release`, not an installable npm package. Historical archives
+remain byte-identical.
+
+The unversioned `/yolostart.tgz` alias serves the separately packed thin bootstrap
+from `/bootstrap/yolostart-<version>.tgz`, with no-store on the alias. The bootstrap
+embeds digests verified against all four built native artifacts, then downloads
+only its own version's current-platform executable on first run. Default cache
+hits work offline and never use fetched metadata as a trust anchor.
+`YOLOSTART_VERSION` explicitly selects a different mode using a fetched manifest;
+only an explicit `latest` override resolves `latest.txt`.
