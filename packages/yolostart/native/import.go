@@ -45,6 +45,7 @@ type uploadGrant struct {
 type apiError struct {
 	status          int
 	reason, message string
+	retryable       bool
 }
 
 func (e *apiError) Error() string {
@@ -97,11 +98,15 @@ func (d *importDriver) request(ctx context.Context, method, route string, body, 
 			transient = res.StatusCode >= 500
 			if res.StatusCode < 200 || res.StatusCode >= 300 {
 				refusal := struct {
-					Reason  string `json:"reason"`
-					Message string `json:"message"`
+					Reason    string `json:"reason"`
+					Message   string `json:"message"`
+					Retryable *bool  `json:"retryable"`
 				}{}
 				_ = json.Unmarshal(raw, &refusal)
-				result = &apiError{res.StatusCode, refusal.Reason, refusal.Message}
+				if refusal.Reason != "" || refusal.Retryable != nil {
+					transient = false
+				}
+				result = &apiError{status: res.StatusCode, reason: refusal.Reason, message: refusal.Message, retryable: refusal.Retryable != nil && *refusal.Retryable}
 			} else if readErr != nil || len(raw) > 2<<20 {
 				result = errors.New("invalid import API response")
 				transient = true
@@ -252,16 +257,15 @@ func (d *importDriver) upload(ctx context.Context, route string, bundle packedBu
 	return errors.New("bundle upload failed")
 }
 
-// The current server distinguishes HEAD misses by this message, not a unique
-// reason. Match the complete refusal; every other 4xx is terminal.
-func uploadNotArrived(err error) bool {
+// Retry authority comes from the server marker, never status or human wording.
+func retryableRefusal(err error) bool {
 	var refusal *apiError
-	return errors.As(err, &refusal) && refusal.status == 400 && refusal.reason == "bundle-invalid" && refusal.message == "The upload has not arrived. PUT the bundle to uploadUrl, then finalize."
+	return errors.As(err, &refusal) && refusal.retryable
 }
 func (d *importDriver) finalize(ctx context.Context, route string, bundle packedBundle, id string) error {
 	for attempt := 0; ; attempt++ {
 		err := d.request(ctx, "POST", route+"/bundle/finalize", map[string]any{"bundleId": id, "fileList": bundle.files}, nil, true)
-		if !uploadNotArrived(err) || attempt == 2 {
+		if !retryableRefusal(err) || attempt == 2 {
 			return err
 		}
 		if err = d.sleep(ctx, time.Duration(attempt+1)*time.Second); err != nil {
@@ -339,7 +343,7 @@ func (d *importDriver) execute(ctx context.Context, manifest ScanManifest, inven
 	}
 	if e = d.finalize(ctx, route, bundle, grant.BundleID); e != nil {
 		var refusal *apiError
-		if errors.As(e, &refusal) && refusal.status >= 400 && refusal.status < 500 && !uploadNotArrived(e) {
+		if errors.As(e, &refusal) && refusal.status >= 400 && refusal.status < 500 && !retryableRefusal(e) {
 			serverOwnsVerdict = true // Server owns the terminal refusal; do not overwrite it with /fail.
 		}
 		return e

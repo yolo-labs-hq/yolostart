@@ -111,8 +111,8 @@ func TestImportWorkflow(t *testing.T) {
 						t.Error(body)
 					}
 					if scenario == "head-miss" && finalizes == 1 {
-						w.WriteHeader(400)
-						fmt.Fprint(w, `{"reason":"bundle-invalid","message":"The upload has not arrived. PUT the bundle to uploadUrl, then finalize."}`)
+						w.WriteHeader(409)
+						fmt.Fprint(w, `{"reason":"upload-not-arrived","message":"Object visibility is pending.","retryable":true}`)
 						return
 					}
 					if scenario == "finalize-refused" || scenario == "finalize-invalid" || scenario == "finalize-throttled" {
@@ -124,7 +124,7 @@ func TestImportWorkflow(t *testing.T) {
 							code, reason = 400, "bundle-invalid"
 						}
 						w.WriteHeader(code)
-						fmt.Fprintf(w, `{"reason":%q,"message":"server rejected archive"}`, reason)
+						fmt.Fprintf(w, `{"reason":%q,"message":"server rejected archive","retryable":false}`, reason)
 						return
 					}
 					if scenario == "retry-finalize" && finalizes == 1 {
@@ -216,5 +216,39 @@ func TestUploadRejectsUnsafeGrant(t *testing.T) {
 		if e := d.upload(context.Background(), "", packedBundle{}, grant); e == nil {
 			t.Fatal("unsafe grant accepted")
 		}
+	}
+}
+
+func TestFinalizeRetryMarker(t *testing.T) {
+	for _, tc := range []struct {
+		name, body   string
+		status, want int
+	}{
+		{"true", `{"reason":"upload-not-arrived","message":"new wording","retryable":true}`, 409, 3},
+		{"true server error", `{"retryable":true}`, 503, 3},
+		{"false server error", `{"retryable":false}`, 503, 1},
+		{"true different status", `{"retryable":true}`, 400, 3},
+		{"missing", `{"reason":"upload-not-arrived","message":"The upload has not arrived. PUT the bundle to uploadUrl, then finalize."}`, 409, 1},
+		{"false", `{"reason":"upload-not-arrived","retryable":false}`, 409, 1},
+		{"legacy message", `{"reason":"bundle-invalid","message":"The upload has not arrived. PUT the bundle to uploadUrl, then finalize."}`, 400, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			calls := 0
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				calls++
+				w.WriteHeader(tc.status)
+				fmt.Fprint(w, tc.body)
+			}))
+			defer server.Close()
+			driver := newImport(io.Discard, "fixture")
+			driver.base = server.URL
+			driver.sleep = func(ctx context.Context, _ time.Duration) error { return ctx.Err() }
+			if err := driver.finalize(context.Background(), "/session", packedBundle{}, "bundle"); err == nil {
+				t.Fatal("expected refusal")
+			}
+			if calls != tc.want {
+				t.Fatal(calls, tc.want)
+			}
+		})
 	}
 }

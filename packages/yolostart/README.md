@@ -1,4 +1,4 @@
-# yolostart 0.3.1
+# yolostart 0.3.2
 
 One native CLI, two entry points:
 
@@ -17,7 +17,7 @@ The custom hostname `yolostart.sh` is live (operator-verified). `YOLOSTART_VERSI
 `npx https://yolostart-sh.yolo.host/releases/0.2.0/yolostart-0.2.0.tgz`.
 After registry publication, `npx yolostart@0.2.0` also works. Git is required for repository discovery and metadata.
 
-## Import flow (0.3.1; server integration pending)
+## Import flow (0.3.2; server integration pending)
 
 Without `--dry-run`, the CLI signs in, scans, creates an approval session, prints
 the browser URL, and waits. The browser picks one candidate, its workspace name
@@ -98,7 +98,7 @@ publishing subsequent versions so pinned shell installs remain available.
 This native + optional npm architecture supersedes the plan's original
 npm-only bootstrap choice at the operator's request. The plan is left unchanged.
 
-Finalize retries a HEAD-miss refusal at most twice after PUT succeeds. The current
-server uses `bundle-invalid` for both HEAD misses and invalid archives, so the
-client matches the exact HEAD-miss message; other 4xx refusals are printed and
-are neither retried nor overwritten by a client failure report.
+Finalize retries a refusal at most twice when its envelope explicitly carries
+`retryable: true` (currently only `upload-not-arrived`). Status codes and message
+wording do not authorize a retry. Missing/false markers on other 4xx refusals
+preserve the server verdict without a replacement client failure report.
