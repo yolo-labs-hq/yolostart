@@ -17,7 +17,7 @@ import (
 )
 
 func TestImportWorkflow(t *testing.T) {
-	for _, scenario := range []string{"success", "denied", "changed", "upload-failed", "seed-failed", "timeout", "ready-without-seed", "retry-create", "retry-finalize", "head-miss", "finalize-refused", "finalize-invalid", "finalize-throttled"} {
+	for _, scenario := range []string{"success", "checksum-present", "denied", "changed", "upload-failed", "seed-failed", "timeout", "ready-without-seed", "retry-create", "retry-finalize", "head-miss", "finalize-refused", "finalize-invalid", "finalize-throttled"} {
 		t.Run(scenario, func(t *testing.T) {
 			root := t.TempDir()
 			put(t, root, "keep.txt", "approved content")
@@ -55,8 +55,15 @@ func TestImportWorkflow(t *testing.T) {
 					}
 					uploaded, _ := io.ReadAll(r.Body)
 					sum := sha256.Sum256(uploaded)
-					if hex.EncodeToString(sum[:]) != announced.SHA || base64.StdEncoding.EncodeToString(sum[:]) != r.Header.Get("X-Amz-Checksum-Sha256") {
+					if hex.EncodeToString(sum[:]) != announced.SHA {
 						t.Error("checksum mismatch")
+					}
+					wantChecksum := ""
+					if scenario == "checksum-present" {
+						wantChecksum = base64.StdEncoding.EncodeToString(sum[:])
+					}
+					if r.Header.Get("X-Amz-Checksum-Sha256") != wantChecksum {
+						t.Error("checksum header was not echoed exactly as granted")
 					}
 					if scenario == "upload-failed" {
 						w.WriteHeader(400)
@@ -101,8 +108,12 @@ func TestImportWorkflow(t *testing.T) {
 				case "POST /v1/yolostart/sessions/session-1/bundle":
 					bundles++
 					_ = json.NewDecoder(r.Body).Decode(&announced)
-					raw, _ := hex.DecodeString(announced.SHA)
-					_ = json.NewEncoder(w).Encode(uploadGrant{BundleID: "bundle-1", UploadURL: server.URL + "/put", ExpiresAt: now.Add(15 * time.Minute), UploadHeaders: map[string]string{"Content-Type": "application/gzip", "Content-Length": fmt.Sprint(announced.Bytes), "x-amz-checksum-sha256": base64.StdEncoding.EncodeToString(raw)}})
+					headers := map[string]string{"Content-Type": "application/gzip", "Content-Length": fmt.Sprint(announced.Bytes)}
+					if scenario == "checksum-present" {
+						raw, _ := hex.DecodeString(announced.SHA)
+						headers["x-amz-checksum-sha256"] = base64.StdEncoding.EncodeToString(raw)
+					}
+					_ = json.NewEncoder(w).Encode(uploadGrant{BundleID: "bundle-1", UploadURL: server.URL + "/put", ExpiresAt: now.Add(15 * time.Minute), UploadHeaders: headers})
 				case "POST /v1/yolostart/sessions/session-1/bundle/finalize":
 					finalizes++
 					var body struct {
@@ -167,7 +178,7 @@ func TestImportWorkflow(t *testing.T) {
 			transport.DisableCompression = true
 			d.uploadClient = &http.Client{Transport: transport}
 			err := d.execute(context.Background(), manifest, invs, &out)
-			success := scenario == "success" || scenario == "retry-create" || scenario == "retry-finalize" || scenario == "head-miss"
+			success := scenario == "success" || scenario == "checksum-present" || scenario == "retry-create" || scenario == "retry-finalize" || scenario == "head-miss"
 			if success {
 				if err != nil || out.String() != "https://yolo.studio/workspace?id=ws-1\n" {
 					t.Fatal(out.String(), err)
@@ -328,5 +339,32 @@ func TestImportRequestBodies(t *testing.T) {
 		if strictJSONBody(w, r) || w.Code != 400 {
 			t.Errorf("strict fixture admitted %s", raw)
 		}
+	}
+}
+
+func TestUploadGrantValidationWithoutChecksum(t *testing.T) {
+	for _, tc := range []struct {
+		name, want string
+		change     func(*uploadGrant)
+	}{
+		{"missing type", "incomplete upload grant", func(g *uploadGrant) { delete(g.UploadHeaders, "Content-Type") }},
+		{"wrong type", "incomplete upload grant", func(g *uploadGrant) { g.UploadHeaders["Content-Type"] = "text/plain" }},
+		{"missing length", "incomplete upload grant", func(g *uploadGrant) { delete(g.UploadHeaders, "Content-Length") }},
+		{"wrong length", "incomplete upload grant", func(g *uploadGrant) { g.UploadHeaders["Content-Length"] = "2" }},
+		{"unexpected header", "unexpected upload header", func(g *uploadGrant) { g.UploadHeaders["Authorization"] = "secret" }},
+		{"duplicate header", "duplicate upload header", func(g *uploadGrant) { g.UploadHeaders["content-type"] = "application/gzip" }},
+		{"http", "invalid upload grant", func(g *uploadGrant) { g.UploadURL = "http://example.test/upload" }},
+		{"userinfo", "invalid upload grant", func(g *uploadGrant) { g.UploadURL = "https://user@example.test/upload" }},
+		{"missing expiry", "invalid upload grant", func(g *uploadGrant) { g.ExpiresAt = time.Time{} }},
+		{"expired", "upload grant expired", func(g *uploadGrant) { g.ExpiresAt = time.Now().Add(-time.Minute) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			g := uploadGrant{UploadURL: "https://example.test/upload", ExpiresAt: time.Now().Add(time.Minute), UploadHeaders: map[string]string{"Content-Type": "application/gzip", "Content-Length": "1"}}
+			tc.change(&g)
+			d := newImport(io.Discard, "fixture")
+			if err := d.upload(context.Background(), "", packedBundle{size: 1}, g); err == nil || err.Error() != tc.want {
+				t.Fatalf("got %v, want %s", err, tc.want)
+			}
+		})
 	}
 }

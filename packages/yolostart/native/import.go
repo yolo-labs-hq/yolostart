@@ -223,7 +223,7 @@ func (d *importDriver) upload(ctx context.Context, route string, bundle packedBu
 			return errors.New("unexpected upload header")
 		}
 	}
-	if headers.Get("Content-Type") != "application/gzip" || headers.Get("Content-Length") != strconv.FormatInt(bundle.size, 10) || headers.Get("X-Amz-Checksum-Sha256") == "" {
+	if headers.Get("Content-Type") != "application/gzip" || headers.Get("Content-Length") != strconv.FormatInt(bundle.size, 10) {
 		return errors.New("incomplete upload grant")
 	}
 	for attempt := 0; attempt < 3; attempt++ {
