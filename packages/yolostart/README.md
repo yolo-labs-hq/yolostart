@@ -1,4 +1,4 @@
-# yolostart 0.3.5
+# yolostart 0.3.6
 
 One native CLI, two entry points:
 
@@ -17,7 +17,7 @@ The custom hostname `yolostart.sh` is live (operator-verified). `YOLOSTART_VERSI
 `npx https://yolostart-sh.yolo.host/releases/0.2.0/yolostart-0.2.0.tgz`.
 After registry publication, `npx yolostart@0.2.0` also works. Git is required for repository discovery and metadata.
 
-## Import flow (0.3.5; server integration pending)
+## Import flow (0.3.6; server integration pending)
 
 Without `--dry-run`, the CLI signs in, scans, creates an approval session, prints
 the browser URL, and waits. The browser picks one candidate, its workspace name
@@ -130,3 +130,31 @@ unscoped `yolostart`. It never repacks or invokes publish lifecycle scripts.
 The operator must provision repository secret `NPM_TOKEN` with write access to
 `yolostart`; missing credentials fail with `ENEEDAUTH`. No token is available to
 the build/test/scan steps. Writing these workflows does not publish a release.
+
+## Browser opening and endpoint overrides (0.3.6)
+
+The device sign-in URL is always printed. The CLI also tries to open it using
+macOS `open`, or Linux `xdg-open` when `DISPLAY` or `WAYLAND_DISPLAY` is set.
+`BROWSER` takes precedence and names an executable or absolute executable path
+(not a shell command); the URL is passed as a separate argument. A nonempty
+`CI` variable or `--no-browser` suppresses automatic opening. Launch failure is
+silent, and a launched browser never blocks sign-in polling or inherits input.
+
+`YOLOSTART_API_URL` overrides `https://api.yolo.studio/v1` and
+`YOLOSTART_APP_URL` overrides `https://yolo.studio`. Set the full API base,
+including `/v1`. Each non-default target is printed once before sign-in on
+stderr. Both accept HTTPS; local development may use HTTP only with the exact
+host `localhost` or `127.0.0.1`. Credentials, query strings and fragments are
+rejected. Device authentication still uses the existing shared auth service;
+these overrides select the import API and approval/workspace web URLs.
+
+For a piped installer, place variables on `sh` so the CLI inherits them:
+
+```sh
+curl -fsSL https://yolostart.sh/install.sh | \
+  YOLOSTART_API_URL=https://staging-api.yolo.studio/v1 \
+  YOLOSTART_APP_URL=https://staging.yolo.studio sh -s -- --no-browser --dry-run
+```
+
+The example targets must be deployed and configured to accept the sign-in token
+before an import can succeed; overrides do not enable a dark server feature.

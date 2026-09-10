@@ -15,10 +15,11 @@ import (
 const authURL = "https://auth.yololabs.ai/api/v1/auth"
 
 type authDriver struct {
-	client *http.Client
-	now    func() time.Time
-	sleep  func(context.Context, time.Duration) error
-	report io.Writer
+	openBrowser func(string)
+	client      *http.Client
+	now         func() time.Time
+	sleep       func(context.Context, time.Duration) error
+	report      io.Writer
 }
 
 func newAuth(w io.Writer) authDriver {
@@ -76,7 +77,11 @@ func (a authDriver) login(ctx context.Context) (string, error) {
 	q := u.Query()
 	q.Set("code", userCode)
 	u.RawQuery = q.Encode()
-	fmt.Fprintf(a.report, "Sign in: %s\nWaiting for browser approval...\n", u.String())
+	fmt.Fprintf(a.report, "Sign in: %s\n", u.String())
+	if a.openBrowser != nil {
+		a.openBrowser(u.String())
+	}
+	fmt.Fprintln(a.report, "Waiting for browser approval...")
 	deadline := a.now().Add(time.Duration(min(expiry, 600) * float64(time.Second)))
 	interval := 5 * time.Second
 	if v, ok := data["interval"].(float64); ok && v > 5 {
