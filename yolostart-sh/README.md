@@ -5,7 +5,7 @@ or an `Accept` header containing `text/html`. Every other root request receives
 the exact POSIX `install.sh`. `/install.sh` and `/?raw` always serve the script,
 including in a browser. No User-Agent detection is used. Both responses carry
 `Vary: Accept, Sec-Fetch-Dest` and `Cache-Control: no-store` to isolate variants.
-`landing.html` has inline CSS and no JavaScript or external assets; its banner
+`landing.html` has inline CSS and one inline clipboard script, with no external assets; its banner
 is embedded from the installer at build time. No installer bytes change.
 
 The Worker also serves versioned native files and npm tarballs. `build.mjs` restores prior releases before adding
