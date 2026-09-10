@@ -37,15 +37,15 @@
 <main>
   <div class="eyebrow">YOLO STUDIO / EARLY ACCESS</div>
   <h1>Local work.<br>Cloud workspace.</h1>
-  <p>yolostart is a native command-line tool for bringing a local project into a YOLO Studio workspace. It reads your project on your machine and opens browser sign-in, with no Node or npm installation required. It runs on macOS and Linux, on Intel and ARM.</p>
+  <p>yolostart is a native command-line tool for bringing a local project into a YOLO Studio workspace. It reads your project on your machine, opens browser sign-in, and asks you to approve what comes along before anything uploads — with no Node or npm installation required. It runs on macOS and Linux, on Intel and ARM.</p>
   <div class="command-row">
     <pre class="command" tabindex="0" aria-label="Installation command"><code id="install-command">curl -fsSL https://yolostart.sh | sh</code></pre>
     <button id="copy-command" type="button" aria-live="polite" hidden>Copy</button>
   </div>
   <p class="hint" id="copy-hint" aria-live="polite">Select the command to copy it. Run it from your project folder.</p>
   <a href="/install.sh">Read the script first</a>
-  <p class="status">Import approval and workspace creation are coming soon. To sign in and inspect the scan manifest without uploading project files, add <code>-s -- --dry-run</code> after <code>sh</code>.</p>
-  <p><code>npx yolostart</code> — coming soon on npm.<br>The shell installer works without it.</p>
+  <p class="status">Import approval and workspace creation are live: yolostart scans your project, you approve exactly what comes along in the browser, and it lands in a running workspace. To sign in and inspect the scan manifest without uploading anything, add <code>-s -- --dry-run</code> after <code>sh</code>.</p>
+  <p>Already have Node? <code>npx yolostart</code> does the same thing — a small wrapper that downloads this same verified native binary, so both routes run identical code. The shell installer needs no Node at all.</p>
   <details>
     <summary>The octopus you'll meet in your terminal</summary>
     <pre class="banner" tabindex="0" aria-label="YOLO octopus and yolostart terminal banner"><!-- INSTALL_BANNER --></pre>

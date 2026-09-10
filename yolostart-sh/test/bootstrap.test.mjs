@@ -58,7 +58,12 @@ test('document navigation and HTML Accept select the landing page with cache iso
     const html = await response.text();
     assert.match(html, /curl -fsSL https:\/\/yolostart.sh \| sh/);
     assert.match(html, /href="\/install.sh"/);
-    assert.match(html, /npx yolostart<\/code> — coming soon/);
+    // npx yolostart is PUBLISHED (0.3.12, 2026-09-10), so the page must offer
+    // it rather than promise it. Asserting the absence of "coming soon" too,
+    // because a stale availability claim is the kind of copy that survives
+    // long past the thing it describes — this very line did.
+    assert.match(html, /npx yolostart<\/code>/);
+    assert.doesNotMatch(html, /coming soon/i);
     assert.ok(html.includes(escaped), 'banner comes from the installer verbatim');
     assert.equal((html.match(/<script\b/gi) ?? []).length, 1);
     assert.match(html, /<script>[\s\S]*<\/script>\s*<\/body>/);
