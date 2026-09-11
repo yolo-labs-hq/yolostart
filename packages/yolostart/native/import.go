@@ -97,6 +97,8 @@ func (d *importDriver) request(ctx context.Context, method, route string, body, 
 			return errors.New("invalid import API request")
 		}
 		req.Header.Set("Authorization", "Bearer "+d.token)
+		req.Header.Set("X-Yolostart-Version", Version)
+		req.Header.Set("X-Yolostart-Entrypoint", os.Getenv("YOLOSTART_ENTRYPOINT"))
 		if body != nil {
 			req.Header.Set("Content-Type", "application/json")
 		}

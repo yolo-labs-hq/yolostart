@@ -85,4 +85,4 @@ else actual=$(shasum -a 256 "$work/$asset"); fi
 [ "${actual%% *}" = "$expected" ] || fail 'Checksum mismatch; refusing to execute.'
 gzip -dc "$work/$asset" > "$work/yolostart" || fail 'Executable decompression failed.'
 chmod 700 "$work/yolostart"
-exec "$work/yolostart" "$@"
+YOLOSTART_ENTRYPOINT=shell exec "$work/yolostart" "$@"

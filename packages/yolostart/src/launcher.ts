@@ -136,7 +136,7 @@ export async function resolveExecutable(options: LaunchOptions = {}): Promise<st
 export async function launch(args: string[], options: LaunchOptions = {}): Promise<number> {
   const executable = await resolveExecutable(options);
   return new Promise<number>((resolve, reject) => {
-    const child = spawn(executable, args, { stdio: "inherit" });
+    const child = spawn(executable, args, { stdio: "inherit", env: { ...(options.env ?? process.env), YOLOSTART_ENTRYPOINT: "npm" } });
     const interrupt = () => child.kill("SIGINT"), terminate = () => child.kill("SIGTERM");
     const cleanup = () => { process.off("SIGINT", interrupt); process.off("SIGTERM", terminate); };
     process.on("SIGINT", interrupt); process.on("SIGTERM", terminate);
