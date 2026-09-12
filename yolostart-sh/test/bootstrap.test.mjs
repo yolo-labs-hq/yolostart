@@ -13,7 +13,7 @@ import { join } from "node:path";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { gzipSync } from "node:zlib";
-import worker from "../dist/worker.mjs";
+import worker from "../.test-dist/worker.mjs";
 const script = await readFile(
   new URL("../install.sh", import.meta.url),
   "utf8",

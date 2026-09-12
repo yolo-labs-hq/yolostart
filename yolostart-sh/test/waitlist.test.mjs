@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 // Load the EMITTED worker, so this exercises what actually ships.
-const src = readFileSync(new URL('../dist/worker.mjs', import.meta.url), 'utf8');
+const src = readFileSync(new URL('../.test-dist/worker.mjs', import.meta.url), 'utf8');
 const mod = await import('data:text/javascript;base64,' + Buffer.from(src).toString('base64'));
 const worker = mod.default;
 
