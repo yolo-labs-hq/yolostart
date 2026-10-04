@@ -68,6 +68,10 @@ test('document navigation and HTML Accept select the landing page with cache iso
     // page neither gates on a waitlist nor sends people to sign up first.
     assert.doesNotMatch(html, /closed beta|invite-only|waitlist-form|sign up first/i);
     assert.match(html, /No account yet\? You create one right there\./);
+    // Source links go to the PUBLIC mirror; the monorepo is private, so a link
+    // into it is a 404 for every visitor.
+    assert.match(html, /href="https:\/\/github.com\/yolo-labs-hq\/yolostart"/);
+    assert.doesNotMatch(html, /yolo-labs-hq\/monorepo/);
     assert.ok(html.includes(escaped), 'banner comes from the installer verbatim');
     assert.equal((html.match(/<script\b/gi) ?? []).length, 1);
     assert.match(html, /<script>[\s\S]*<\/script>\s*<\/body>/);

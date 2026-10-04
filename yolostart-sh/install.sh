@@ -18,7 +18,7 @@ cat <<'BANNER'
 |      ##  #   ##  ##       Local work. Cloud possibilities.                   |
 |         ## ###            You decide what comes along.                       |
 |         ##                                                                   |
-|          ###              EARLY ACCESS  /  IMPORTS ARE LIVE                  |
+|          ###              IMPORTS ARE LIVE                                   |
 |                                                                              |
 | START WITH A LOOK AROUND                                                     |
 |   1. Run from your project folder, or use --scan ~/code.                     |
