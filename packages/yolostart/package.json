@@ -3,6 +3,15 @@
   "version": "0.3.13",
   "description": "Thin bootstrap for the official yolostart native CLI",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yolo-labs-hq/yolostart.git",
+    "directory": "packages/yolostart"
+  },
+  "homepage": "https://github.com/yolo-labs-hq/yolostart#readme",
+  "bugs": {
+    "url": "https://github.com/yolo-labs-hq/yolostart/issues"
+  },
   "type": "module",
   "bin": {
     "yolostart": "dist/cli.js"
