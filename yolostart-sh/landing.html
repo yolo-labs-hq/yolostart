@@ -12,9 +12,8 @@
   <style>
     /* Palette is the octopus's own: its three greens (#14e08c body, #7defc0
        tentacles, #d8fbea eyes) on the green-black ink yolo.studio uses, so the
-       page reads as the same creature you meet in the terminal. Violet is the
-       one non-terminal colour, reserved for the one thing the page asks of the
-       reader (get an account), the same job blue did when this was a waitlist. */
+       page reads as the same creature you meet in the terminal. There is no
+       separate sign-up ask: the browser sign-in in step 2 creates the account. */
     :root {
       color-scheme: dark;
       --ink: #04130d;
@@ -24,8 +23,6 @@
       --muted: #93bfaa;
       --green: #14e08c;
       --mint: #7defc0;
-      --violet: #a78bfa;
-      --violet-deep: #6d3fe0;
       --mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, Consolas, monospace;
       font-family: var(--mono);
       background: var(--ink);
@@ -77,15 +74,6 @@
     .alt .command { font-size: 16px; }
     .alt p.label { font-size: 15px; color: var(--foam); }
 
-    /* The one ask. Violet steps outside the terminal greens on purpose, but
-       stays a dark panel so it never out-shouts the command above. */
-    .account { margin-top: 56px; border: 1px solid #3d2f73; border-radius: 10px; background: #0f1530; padding: 24px 24px 26px; display: grid; grid-template-columns: 1fr auto; gap: 18px 28px; align-items: center; }
-    .account h2 { margin-bottom: 8px; color: #ece6ff; }
-    .account p { font-size: 14px; color: #bdb3e6; }
-    .account .cta { display: inline-block; padding: 12px 18px; border-radius: 6px; background: var(--violet-deep); color: #fff; font-size: 14px; font-weight: 700; text-decoration: none; white-space: nowrap; }
-    .account .cta:hover { background: #7d52f0; color: #fff; }
-    .account .cta:focus-visible { outline-color: var(--violet); }
-
     details { margin-top: 44px; border-top: 1px solid var(--line); padding-top: 20px; }
     summary { cursor: pointer; color: var(--muted); font-size: 13px; }
     summary:hover { color: var(--foam); }
@@ -99,8 +87,6 @@
          instead of scrolling behind it. */
       .command-row { flex-direction: column; align-items: stretch; padding: 14px; gap: 12px; }
       .command { font-size: 13.5px; }
-      .account { grid-template-columns: 1fr; padding: 20px; }
-      .account .cta { text-align: center; }
       .dry-run { padding-left: 0; }
     }
   </style>
@@ -125,7 +111,7 @@
     <h2 id="steps-heading">What happens when you run it</h2>
     <ol class="steps">
       <li>yolostart scans your project on your machine. Nothing uploads yet.</li>
-      <li>Your browser opens so you can sign in to YOLO Studio.</li>
+      <li>Your browser opens to sign in to YOLO Studio. No account yet? You create one right there.</li>
       <li>You see exactly what would come along, and approve it.</li>
       <li>Your project opens in a running cloud workspace.</li>
     </ol>
@@ -139,14 +125,6 @@
       <button class="copy-command" type="button" aria-live="polite" hidden>Copy</button>
     </div>
     <p class="hint">A small wrapper that downloads the same native binary and checks it, so both routes run identical code.</p>
-  </section>
-
-  <section class="account" aria-labelledby="account-heading">
-    <div>
-      <h2 id="account-heading">You'll need a YOLO Studio account</h2>
-      <p>yolostart imports into your workspace, so sign up first. Have an invite code? Enter it after you sign in.</p>
-    </div>
-    <a class="cta" href="https://yolo.studio">Create an account</a>
   </section>
 
   <details>
