@@ -26,7 +26,7 @@ cat <<'BANNER'
 |   3. Read the manifest: candidates, file counts, and exclusions.             |
 |                                                                              |
 | QUICK START  /  NO NODE OR NPM REQUIRED                                      |
-|   curl -fsSL https://yolostart-sh.yolo.host | sh -s -- --dry-run             |
+|   curl -fsSL https://yolostart.sh | sh -s -- --dry-run                       |
 |                                                                              |
 | MAKE IT YOURS                                                                |
 |   --scan ~/code       Look for projects in a different directory.            |
