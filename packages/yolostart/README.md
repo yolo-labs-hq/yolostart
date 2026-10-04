@@ -8,11 +8,11 @@ One native CLI, two entry points:
   bootstrap. The direct tarball is also available at
   `https://yolostart-sh.yolo.host/yolostart.tgz`.
 
-The **npm package and native CLI share the same version**, currently 0.3.14.
-`npx yolostart@0.3.14` runs CLI 0.3.14. The thin tarball embeds all four platforms'
+The **npm package and native CLI share the same version**, currently 0.3.15.
+`npx yolostart@0.3.15` runs CLI 0.3.15. The thin tarball embeds all four platforms'
 compressed and executable SHA-256 digests, verified at build time against the
 native artifacts. By default it downloads only the current platform's gzip from
-`https://yolostart-sh.yolo.host/releases/0.3.14/`; it fetches neither `latest.txt`
+`https://yolostart-sh.yolo.host/releases/0.3.15/`; it fetches neither `latest.txt`
 nor a manifest. Its integrity anchor is the npm tarball itself.
 
 `YOLOSTART_VERSION` explicitly switches to **override mode**: that version's
@@ -22,7 +22,7 @@ manifest is fetched and both digests are checked against it instead. An explicit
 
 ```sh
 YOLOSTART_VERSION=0.3.11 npx https://yolostart-sh.yolo.host/yolostart.tgz --dry-run
-curl -fsSL https://yolostart.sh | YOLOSTART_VERSION=0.3.14 sh -s -- --dry-run
+curl -fsSL https://yolostart.sh | YOLOSTART_VERSION=0.3.15 sh -s -- --dry-run
 ```
 
 The bootstrap has no dependencies or install hooks. It downloads at first **run**,
