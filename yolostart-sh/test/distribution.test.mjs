@@ -44,7 +44,7 @@ test('absent or changed public copies never discard pins',async()=>{
  for(const missing of [true,false]) await fixture(async(dir,index,remote,fetchImpl)=>{
   const key=[...remote.keys()][0];
   if(missing)remote.delete(key);else remote.set(key,Buffer.from('wrong bytes'));
-  await assert.rejects(compactReleases(index,dir,30,fetchImpl),missing?/exceed capacity/:/bytes differ/);
+  await assert.rejects(compactReleases(index,dir,30,fetchImpl),/exceed capacity/);
   assert.ok((await readFile(join(dir,'1.0.0','yolostart-1.0.0.tgz'))).length>0);
  });
 });
@@ -58,4 +58,29 @@ test('restoration refuses redirects except the exact artifact on the downloads o
    await assert.rejects(restoreReleases(dir,bootstrap,fetchImpl),/Untrusted release redirect/);
   } finally {await rm(dir,{recursive:true,force:true});}
  }
+});
+
+test('a release whose public copy differs stays on Host while a later verified one is offloaded',async()=>{
+ const dir=await mkdtemp(join(tmpdir(),'yolostart-distribution-'));
+ try {
+  const remote=new Map();const names=v=>[`yolostart-${v}.tgz`,...['linux-amd64','linux-arm64','darwin-amd64','darwin-arm64'].map(t=>`yolostart-${t}.gz`)];
+  for(const version of ['1.0.0','1.1.0']) {
+   await mkdir(join(dir,version));
+   for(const name of names(version)) {
+    const data=Buffer.from((version+name).repeat(4));
+    await writeFile(join(dir,version,name),data);remote.set(`https://dl.yolo.studio/yolostart/${version}/${name}`,data);
+   }
+  }
+  remote.set('https://dl.yolo.studio/yolostart/1.0.0/yolostart-1.0.0.tgz',Buffer.from('different archive bytes'));
+  const fetchImpl=async url=>remote.has(url)?new Response(remote.get(url)):new Response('missing',{status:404});
+  const warn=console.warn;const warnings=[];console.warn=m=>warnings.push(m);
+  // Room for one release's files, not both, so compaction must offload one.
+  const releaseBytes=v=>names(v).reduce((n,name)=>n+remote.get(`https://dl.yolo.studio/yolostart/${v}/${name}`).length,0);
+  const limit=Math.ceil(releaseBytes('1.1.0')*1.5);
+  let downloads;
+  try {downloads=await compactReleases({releases:[{version:'1.0.0'},{version:'1.1.0'}]},dir,limit,fetchImpl);} finally {console.warn=warn;}
+  assert.deepEqual(Object.keys(downloads).sort(),names('1.1.0').map(n=>`/releases/1.1.0/${n}`).sort());
+  for(const name of names('1.0.0')) assert.ok((await readFile(join(dir,'1.0.0',name))).length>0,'unverifiable release keeps every Host file');
+  assert.match(warnings.join('\n'),/1\.0\.0\/yolostart-1\.0\.0\.tgz; keeping 1\.0\.0 on Host/);
+ } finally {await rm(dir,{recursive:true,force:true});}
 });

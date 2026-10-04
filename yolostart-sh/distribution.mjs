@@ -34,7 +34,11 @@ export async function compactReleases(index, dir, limit=49*1024*1024, fetchImpl=
         if(size>local.length) throw Error(`Public release size mismatch: ${version}/${name}`);
         chunks.push(chunk);
       }
-      if(!Buffer.concat(chunks).equals(local)) throw Error(`Public release bytes differ: ${version}/${name}`);
+      // A public copy with different bytes is never served in place of the
+      // pinned one. Treat it like an absent copy: this release stays on Host,
+      // and later releases may still be offloaded. (0.3.12/0.3.13 archives
+      // differ between Host and dl by file modes; their binaries match.)
+      if(!Buffer.concat(chunks).equals(local)) { console.warn(`Public release bytes differ: ${version}/${name}; keeping ${version} on Host`); break; }
       verified.push({path,key:`/releases/${version}/${name}`,record:{url,bytes:local.length,sha256:digest(local)}});
     }
     if(verified.length!==names.length) continue;
