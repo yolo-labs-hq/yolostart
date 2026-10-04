@@ -64,6 +64,10 @@ test('document navigation and HTML Accept select the landing page with cache iso
     // long past the thing it describes — this very line did.
     assert.match(html, /npx yolostart<\/code>/);
     assert.doesNotMatch(html, /coming soon/i);
+    // Accounts are open (invite codes are optional), so the page points at
+    // sign-up rather than a closed-beta waitlist.
+    assert.doesNotMatch(html, /closed beta|invite-only|waitlist-form/i);
+    assert.match(html, /href="https:\/\/yolo.studio">Create an account</);
     assert.ok(html.includes(escaped), 'banner comes from the installer verbatim');
     assert.equal((html.match(/<script\b/gi) ?? []).length, 1);
     assert.match(html, /<script>[\s\S]*<\/script>\s*<\/body>/);

@@ -10,7 +10,12 @@ export async function buildWorker(downloads, outputDirectory) {
   if (template.split('<!-- INSTALL_BANNER -->').length !== 2) throw Error('Landing banner slot missing or duplicated');
   const escapeHtml = value => value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
   const svg = await readFile(new URL('./icons/octopus.svg', import.meta.url), 'utf8');
+  if (template.split('<!-- OCTOPUS_SVG -->').length !== 2) throw Error('Landing octopus slot missing or duplicated');
+  // The same octopus, inline as the page's mark: drop the XML prolog and mark it
+  // decorative (the wordmark beside it carries the name).
+  const octopus = svg.replace(/^<\?xml[^>]*>\s*/, '').replace('<svg ', '<svg class="mark" aria-hidden="true" focusable="false" ');
   const landing = template.replace('<!-- INSTALL_BANNER -->', () => escapeHtml(banner))
+    .replace('<!-- OCTOPUS_SVG -->', () => octopus)
     .replace('<!-- ICON_SVG -->', () => 'data:image/svg+xml;base64,' + Buffer.from(svg).toString('base64'));
   const icons = {};
   for (const [path, type] of [['favicon.ico', 'image/x-icon'], ['apple-touch-icon.png', 'image/png']]) {
