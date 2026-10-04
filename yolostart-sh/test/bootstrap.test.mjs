@@ -18,8 +18,8 @@ const script = await readFile(
   new URL("../install.sh", import.meta.url),
   "utf8",
 );
-test("User-Agent never selects HTML; release assets keep the native distribution", async () => {
-  for (const agent of ["curl/8", "Mozilla/5.0"]) {
+test("ordinary User-Agents never select HTML; release assets keep the native distribution", async () => {
+  for (const agent of ["curl/8", "Wget/1.21", "Mozilla/5.0", "libcurl/8"]) {
     const response = worker.fetch(
       new Request("https://example.test/", {
         headers: { "User-Agent": agent },
@@ -53,7 +53,7 @@ test('document navigation and HTML Accept select the landing page with cache iso
   ]) {
     const response = worker.fetch(new Request('https://example.test/', {headers}));
     assert.equal(response.headers.get('content-type'), 'text/html; charset=utf-8');
-    assert.equal(response.headers.get('vary'), 'Accept, Sec-Fetch-Dest');
+    assert.equal(response.headers.get('vary'), 'Accept, Sec-Fetch-Dest, User-Agent');
     assert.equal(response.headers.get('cache-control'), 'no-store');
     const html = await response.text();
     assert.match(html, /curl -fsSL https:\/\/yolostart.sh \| sh/);
@@ -77,8 +77,8 @@ test('document navigation and HTML Accept select the landing page with cache iso
     assert.match(html, /<script>[\s\S]*<\/script>\s*<\/body>/);
     assert.doesNotMatch(html, /<script[^>]+src\s*=|<link[^>]+rel="stylesheet"|<img\b|\bsrc\s*=|@import|url\(/i);
     const links = [...html.matchAll(/<link\b[^>]*href="([^"]+)"[^>]*>/gi)].map(match => match[1]);
-    assert.equal(links.length, 3);
-    assert.deepEqual(links.filter(href => !href.startsWith('data:image/svg+xml;base64,')), ['/favicon.ico', '/apple-touch-icon.png']);
+    assert.equal(links.length, 4);
+    assert.deepEqual(links.filter(href => !href.startsWith('data:image/svg+xml;base64,')), ['https://yolostart.sh/', '/favicon.ico', '/apple-touch-icon.png']);
     const svg = Buffer.from(links.find(href => href.startsWith('data:')).split(',')[1], 'base64').toString();
     assert.equal(svg, await readFile(new URL('../icons/octopus.svg', import.meta.url), 'utf8'));
     // BOTH command blocks carry a copy button, and both ship `hidden` so the
@@ -91,6 +91,35 @@ test('document navigation and HTML Accept select the landing page with cache iso
   }
 });
 
+test('link-preview crawlers get the landing page with absolute social tags', async () => {
+  for (const agent of [
+    'Slackbot-LinkExpanding 1.0 (+https://api.slack.com/robots)', 'Twitterbot/1.0', 'facebookexternalhit/1.1',
+    'LinkedInBot/1.0 (compatible; Mozilla/5.0)', 'Mozilla/5.0 (compatible; Discordbot/2.0; +https://discordapp.com)',
+  ]) {
+    const response = worker.fetch(new Request('https://example.test/', {headers: {'User-Agent': agent, Accept: '*/*'}}));
+    assert.equal(response.headers.get('content-type'), 'text/html; charset=utf-8', agent);
+    const html = await response.text();
+    for (const [key, value] of [
+      ['og:url', 'https://yolostart.sh/'], ['og:image', 'https://yolostart.sh/og.png'], ['og:image:width', '1200'],
+      ['og:image:height', '630'], ['twitter:card', 'summary_large_image'], ['twitter:image', 'https://yolostart.sh/og.png'],
+    ]) assert.match(html, new RegExp(`<meta (property|name)="${key}" content="${value.replace(/[.?]/g, '\\$&')}">`), key);
+    assert.match(html, /<meta property="og:title" content="[^"]+">/);
+    assert.match(html, /<meta property="og:description" content="[^"]+">/);
+  }
+  // The raw routes stay raw for crawlers too.
+  const raw = worker.fetch(new Request('https://example.test/install.sh', {headers: {'User-Agent': 'Twitterbot/1.0'}}));
+  assert.equal(await raw.text(), script);
+});
+
+test('the social card is a 1200x630 PNG', async () => {
+  const response = worker.fetch(new Request('https://example.test/og.png'));
+  assert.equal(response.headers.get('content-type'), 'image/png');
+  const bytes = Buffer.from(await response.arrayBuffer());
+  assert.deepEqual(bytes, await readFile(new URL('../icons/og.png', import.meta.url)));
+  assert.equal(bytes.readUInt32BE(16), 1200);
+  assert.equal(bytes.readUInt32BE(20), 630);
+});
+
 test('raw routes and curl-shaped requests always receive identical script bytes', async () => {
   const browserHeaders = {'Sec-Fetch-Dest': 'document', Accept: 'text/html'};
   for (const [path, headers] of [
@@ -101,7 +130,7 @@ test('raw routes and curl-shaped requests always receive identical script bytes'
   ]) {
     const response = worker.fetch(new Request('https://example.test' + path, {headers}));
     assert.equal(response.headers.get('content-type'), 'text/plain; charset=utf-8');
-    assert.equal(response.headers.get('vary'), 'Accept, Sec-Fetch-Dest');
+    assert.equal(response.headers.get('vary'), 'Accept, Sec-Fetch-Dest, User-Agent');
     assert.equal(response.headers.get('cache-control'), 'no-store');
     assert.deepEqual(Buffer.from(await response.arrayBuffer()), Buffer.from(script));
   }
