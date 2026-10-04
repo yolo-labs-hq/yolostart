@@ -136,10 +136,16 @@ export async function resolveExecutable(options: LaunchOptions = {}): Promise<st
 export async function launch(args: string[], options: LaunchOptions = {}): Promise<number> {
   const executable = await resolveExecutable(options);
   return new Promise<number>((resolve, reject) => {
-    const child = spawn(executable, args, { stdio: "inherit", env: { ...(options.env ?? process.env), YOLOSTART_ENTRYPOINT: "npm" } });
-    const interrupt = () => child.kill("SIGINT"), terminate = () => child.kill("SIGTERM");
+    // Listen BEFORE spawning. spawn() returns once the native CLI is already
+    // running; a SIGINT/SIGTERM that lands before a later listener would kill
+    // this bootstrap by default and orphan the CLI without forwarding it. The
+    // handlers cannot run until this synchronous block ends, so `child` is set.
+    let child: ReturnType<typeof spawn> | undefined;
+    const interrupt = () => child?.kill("SIGINT"), terminate = () => child?.kill("SIGTERM");
     const cleanup = () => { process.off("SIGINT", interrupt); process.off("SIGTERM", terminate); };
     process.on("SIGINT", interrupt); process.on("SIGTERM", terminate);
+    try { child = spawn(executable, args, { stdio: "inherit", env: { ...(options.env ?? process.env), YOLOSTART_ENTRYPOINT: "npm" } }); }
+    catch { cleanup(); reject(Error(`Could not start the native CLI. ${FALLBACK}`)); return; }
     child.once("error", () => { cleanup(); reject(Error(`Could not start the native CLI. ${FALLBACK}`)); });
     child.once("close", (code, signal) => { cleanup(); resolve(code ?? (signal === "SIGINT" ? 130 : signal === "SIGTERM" ? 143 : 1)); });
   });

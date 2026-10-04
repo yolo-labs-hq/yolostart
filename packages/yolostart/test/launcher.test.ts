@@ -118,20 +118,38 @@ test('redirects admit only the same artifact on the official downloads host', as
   assert.equal(f.requests.at(-1),target);
   assert.equal(trustedReleaseRedirect(target,target),false);
 });
+// Stand-in native CLI for the signal tests. It exits by itself after ~20s, so a
+// signal that never arrives fails the test with exit 1 instead of leaving an
+// orphaned loop holding the test's stdout pipe open (which hung CI for 20min).
+const signalNative = Buffer.from('#!/bin/sh\ntrap "exit 130" INT\ntrap "exit 143" TERM\necho READY\ni=0\nwhile [ $i -lt 200 ]; do sleep 0.1; i=$((i+1)); done\nexit 1\n');
+async function signalRun(t: TestContext, signal: 'SIGINT' | 'SIGTERM', stallAfterSpawnMs = 0) {
+  const f = await fixture(t, signalNative);
+  // Optionally stall the bootstrap right after spawn() returns: the native CLI
+  // is already running and can print READY before the bootstrap's next line.
+  const stall = stallAfterSpawnMs ? `import cp from 'node:child_process'; import {syncBuiltinESMExports} from 'node:module';
+    const realSpawn=cp.spawn; cp.spawn=(...a)=>{const c=realSpawn(...a);const until=Date.now()+${stallAfterSpawnMs};while(Date.now()<until){}return c;}; syncBuiltinESMExports();` : '';
+  const script = `${stall}
+    const {launch} = await import(${JSON.stringify(new URL('../dist/launcher.js',import.meta.url).href)});
+    process.exitCode=await launch([], {pinnedRelease:${JSON.stringify(f.manifest)},env:{XDG_CACHE_HOME:${JSON.stringify(f.home)}},fetchImpl:(url,init)=>fetch(${JSON.stringify(f.base)}+new URL(url).pathname,init)});`;
+  // Own process group, so cleanup reaches the stand-in even if the bootstrap died.
+  const child = spawn(process.execPath,['--input-type=module','-e',script],{stdio:['ignore','pipe','pipe'],detached:true});
+  t.after(()=>{try{process.kill(-child.pid!,'SIGKILL');}catch{}});
+  const completion = once(child,'close');
+  await new Promise<void>((resolve,reject)=>{
+    const timer=setTimeout(()=>reject(Error('Child did not become ready')),10000);
+    child.stdout.on('data',chunk=>{if(String(chunk).includes('READY')){clearTimeout(timer);resolve();}});
+  });
+  child.kill(signal); // the bootstrap only, never its group: it must forward
+  return completion;
+}
 test('SIGINT/SIGTERM reach the child and propagate terminal exit status', async t => {
   for (const [signal,code] of [['SIGINT',130],['SIGTERM',143]] as const) await t.test(signal,async t => {
-    const f = await fixture(t,Buffer.from('#!/bin/sh\ntrap "exit 130" INT\ntrap "exit 143" TERM\necho READY\nwhile :; do sleep 0.1; done\n'));
-    const script = `import {launch} from ${JSON.stringify(new URL('../dist/launcher.js',import.meta.url).href)};
-      process.exitCode=await launch([], {pinnedRelease:${JSON.stringify(f.manifest)},env:{XDG_CACHE_HOME:${JSON.stringify(f.home)}},fetchImpl:(url,init)=>fetch(${JSON.stringify(f.base)}+new URL(url).pathname,init)});`;
-    const child = spawn(process.execPath,['--input-type=module','-e',script],{stdio:['ignore','pipe','pipe']});
-    t.after(()=>{child.kill('SIGKILL');});
-    const completion = once(child,'close');
-    await new Promise<void>((resolve,reject)=>{
-      const timer=setTimeout(()=>reject(Error('Child did not become ready')),10000);
-      child.stdout.on('data',chunk=>{if(String(chunk).includes('READY')){clearTimeout(timer);resolve();}});
-    });
-    child.kill(signal);
-    assert.equal((await completion)[0],code);
+    assert.deepEqual(await signalRun(t,signal),[code,null]);
+  });
+});
+test('a signal right after spawn() returns is still forwarded, not fatal to the bootstrap', async t => {
+  for (const [signal,code] of [['SIGINT',130],['SIGTERM',143]] as const) await t.test(signal,async t => {
+    assert.deepEqual(await signalRun(t,signal,300),[code,null]);
   });
 });
 test('built bootstrap has no interactive APIs or retired scanner', async () => {
