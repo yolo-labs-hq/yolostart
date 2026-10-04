@@ -3,8 +3,12 @@
 The Worker serves a static landing page at `/` for `Sec-Fetch-Dest: document`
 or an `Accept` header containing `text/html`. Every other root request receives
 the exact POSIX `install.sh`. `/install.sh` and `/?raw` always serve the script,
-including in a browser. No User-Agent detection is used. Both responses carry
-`Vary: Accept, Sec-Fetch-Dest` and `Cache-Control: no-store` to isolate variants.
+including in a browser. The one User-Agent rule is a narrow allow-list of
+link-preview and search crawlers (Slackbot, Twitterbot, facebookexternalhit,
+LinkedInBot, Discordbot, ...), which also get the landing page so its og:/twitter:
+tags and `/og.png` card render as a link preview; curl and wget never match it.
+Both responses carry `Vary: Accept, Sec-Fetch-Dest, User-Agent` and
+`Cache-Control: no-store` to isolate variants.
 `landing.html` has inline CSS and one inline clipboard script, with no external assets; its banner
 is embedded from the installer at build time. No installer bytes change.
 
