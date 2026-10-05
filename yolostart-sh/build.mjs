@@ -4,6 +4,15 @@ import { spawnSync } from "node:child_process";
 import { restoreReleases, addRelease } from './releases.mjs';
 import { buildWorker } from './build-worker.mjs';
 import { compactReleases } from './distribution.mjs';
+// Google Analytics tag for the landing page, from config/analytics.json (see
+// scripts/analytics/). The public mirror has no scripts/analytics: no tag there.
+// GA_MEASUREMENT_ID overrides the file; GA_MEASUREMENT_ID=off builds without it.
+async function analyticsHtml(site) {
+  if (process.env.GA_MEASUREMENT_ID === 'off') return '';
+  let mod;
+  try { mod = await import('../scripts/analytics/head-html.mjs'); } catch { return ''; }
+  return mod.analyticsHeadHtml(site);
+}
 const result = spawnSync("npm", ["run", "pack:native"], {
   cwd: new URL("../packages/yolostart/", import.meta.url),
   stdio: "inherit",
@@ -32,4 +41,4 @@ try {
   await rm(new URL('./dist/assets/',import.meta.url),{recursive:true,force:true});
   await rename(assets,new URL('./dist/assets/',import.meta.url));
 } finally { await rm(staging,{recursive:true,force:true}); }
-await buildWorker(downloads, new URL('./dist/', import.meta.url));
+await buildWorker(downloads, new URL('./dist/', import.meta.url), {analyticsHtml: await analyticsHtml('yolostart')});
