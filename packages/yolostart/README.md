@@ -4,9 +4,14 @@ One native CLI, two entry points:
 
 - **Shell:** `curl -fsSL https://yolostart.sh | sh` downloads and runs the official
   native executable. No Node, npm, Go, or system installation is needed.
-- **npm:** `npx yolostart` runs the same executable through a small Node 20+
-  bootstrap. The direct tarball is also available at
+- **npm:** `npx yolostart@latest` runs the same executable through a small
+  Node 20+ bootstrap. The direct tarball is also available at
   `https://yolostart-sh.yolo.host/yolostart.tgz`.
+
+Use `@latest`. A bare `npx yolostart` runs any `yolostart` already installed
+globally or in a parent `node_modules` instead of checking npm, so an old copy
+keeps running. Pre-0.3.7 copies fail the import with `HTTP 400, bad-request:
+Request body is not valid JSON`. Run `npm rm -g yolostart` to remove one.
 
 The **npm package and native CLI share the same version**, currently 0.3.15.
 `npx yolostart@0.3.15` runs CLI 0.3.15. The thin tarball embeds all four platforms'

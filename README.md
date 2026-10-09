@@ -4,7 +4,7 @@ Bootstrap a [YOLO Studio](https://yolo.studio) workspace from your terminal.
 
 ```sh
 curl -fsSL https://yolostart.sh | sh   # native binary, no Node required
-npx yolostart                          # same binary via a thin npm bootstrap
+npx yolostart@latest                   # same binary via a thin npm bootstrap
 ```
 
 ## What's in this repo
